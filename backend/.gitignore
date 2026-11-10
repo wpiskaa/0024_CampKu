@@ -2,4 +2,7 @@ node_modules/
 .env
 uploads/*
 !uploads/.gitkeep
+!uploads/equipments/
+uploads/equipments/*
+!uploads/equipments/seed-*.jpg
 

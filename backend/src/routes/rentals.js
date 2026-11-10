@@ -15,7 +15,8 @@ const SELECT = `SELECT r.id, r.customer_id, c.name AS customer_name, c.phone AS 
                        e.photo_path AS equipment_photo,
                        r.processed_by, u.name AS processed_by_name,
                        r.quantity, r.rent_date, r.due_date, r.return_date,
-                       r.total_price, r.late_fee, r.status, r.return_photo_path
+                       r.total_price, r.late_fee, r.status,
+                       r.pickup_photo_path, r.return_photo_path
                   FROM rentals r
                   JOIN customers c ON c.id = r.customer_id
                   JOIN equipments e ON e.id = r.equipment_id
@@ -156,6 +157,9 @@ router.patch('/:id/status', adminOnly, asyncHandler(async (req, res) => {
 
     if (next === 'disewa') {
       if (rental.status !== 'dipesan') throw new HttpError(400, 'Hanya penyewaan berstatus Dipesan yang dapat disewakan');
+      if (!rental.pickup_photo_path) {
+        throw new HttpError(400, 'Wajib mengunggah foto kondisi alat sebelum disewa terlebih dahulu');
+      }
       if (rental.quantity > equipment.stock) {
         throw new HttpError(400, `Stok ${equipment.name} tidak cukup (tersedia ${equipment.stock})`);
       }
@@ -163,6 +167,9 @@ router.patch('/:id/status', adminOnly, asyncHandler(async (req, res) => {
       await conn.query("UPDATE rentals SET status = 'disewa', processed_by = ? WHERE id = ?", [req.user.id, id]);
     } else {
       if (rental.status !== 'disewa') throw new HttpError(400, 'Hanya penyewaan berstatus Disewa yang dapat dikembalikan');
+      if (!rental.return_photo_path) {
+        throw new HttpError(400, 'Wajib mengunggah foto kondisi alat setelah disewa (saat dikembalikan) terlebih dahulu');
+      }
       const returnDate = todayStr();
       const lateFee = calcLateFee(rental.due_date, returnDate, equipment.daily_price, rental.quantity);
       await conn.query('UPDATE equipments SET stock = stock + ? WHERE id = ?', [rental.quantity, equipment.id]);
@@ -174,6 +181,17 @@ router.patch('/:id/status', adminOnly, asyncHandler(async (req, res) => {
   });
 
   res.json(await findOr404(id, req.user));
+}));
+
+// Unggah foto kondisi sebelum disewa (Admin)
+router.post('/:id/pickup-photo', adminOnly, asyncHandler(async (req, res, next) => {
+  req.rental = await findOr404(toInt(req.params.id), req.user);
+  next();
+}), photoUpload('pickups'), asyncHandler(async (req, res) => {
+  const photoPath = `uploads/pickups/${req.file.filename}`;
+  await pool.query('UPDATE rentals SET pickup_photo_path = ? WHERE id = ?', [photoPath, req.rental.id]);
+  removeFile(req.rental.pickup_photo_path);
+  res.json(await findOr404(req.rental.id, req.user));
 }));
 
 // Unggah foto kondisi saat dikembalikan (Admin)
@@ -190,7 +208,8 @@ router.post('/:id/return-photo', adminOnly, asyncHandler(async (req, res, next) 
 // Hapus penyewaan (Admin). Bila masih "disewa", stok dikembalikan lebih dulu.
 router.delete('/:id', adminOnly, asyncHandler(async (req, res) => {
   const id = toInt(req.params.id);
-  let photo = null;
+  let pickupPhoto = null;
+  let returnPhoto = null;
   await withTransaction(async (conn) => {
     const [rows] = await conn.query('SELECT * FROM rentals WHERE id = ? FOR UPDATE', [id]);
     const rental = rows[0];
@@ -198,10 +217,12 @@ router.delete('/:id', adminOnly, asyncHandler(async (req, res) => {
     if (rental.status === 'disewa') {
       await conn.query('UPDATE equipments SET stock = stock + ? WHERE id = ?', [rental.quantity, rental.equipment_id]);
     }
-    photo = rental.return_photo_path;
+    pickupPhoto = rental.pickup_photo_path;
+    returnPhoto = rental.return_photo_path;
     await conn.query('DELETE FROM rentals WHERE id = ?', [id]);
   });
-  removeFile(photo);
+  removeFile(pickupPhoto);
+  removeFile(returnPhoto);
   res.json({ message: 'Penyewaan dihapus' });
 }));
 

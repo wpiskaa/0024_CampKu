@@ -289,10 +289,37 @@ fun RentalDetailScreen(
                 HorizontalDivider(Modifier.padding(vertical = 4.dp))
                 InfoRow("Total", formatRupiah(r.totalPrice + r.lateFee), valueColor = MaterialTheme.colorScheme.primary)
 
+                // 1. Foto Kondisi Sebelum Disewa
+                val hasPickupPhoto = r.pickupPhotoPath != null ||
+                    storage.localFileOrNull(PhotoStorage.KIND_PICKUP, r.id) != null
+                if (isAdmin || hasPickupPhoto) {
+                    SectionTitle("Foto Kondisi Sebelum Disewa")
+                    if (hasPickupPhoto) {
+                        PhotoImage(
+                            kind = PhotoStorage.KIND_PICKUP,
+                            id = r.id,
+                            serverPath = r.pickupPhotoPath,
+                            version = photoVersion,
+                            modifier = Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(16.dp)),
+                        )
+                    } else {
+                        Text(
+                            "Belum ada foto kondisi sebelum disewa (wajib difoto sebelum alat diserahkan).",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    if (isAdmin && r.status == RentalStatus.DIPESAN) {
+                        Spacer(Modifier.height(8.dp))
+                        PhotoPickerButtons(onPicked = vm::uploadPickupPhoto, enabled = !busy)
+                    }
+                }
+
+                // 2. Foto Kondisi Setelah Disewa (Saat Dikembalikan)
                 val hasReturnPhoto = r.returnPhotoPath != null ||
                     storage.localFileOrNull(PhotoStorage.KIND_RETURN, r.id) != null
-                if (isAdmin || hasReturnPhoto) {
-                    SectionTitle("Foto Kondisi Saat Dikembalikan")
+                if ((isAdmin && r.status != RentalStatus.DIPESAN) || hasReturnPhoto) {
+                    SectionTitle("Foto Kondisi Setelah Disewa (Saat Dikembalikan)")
                     if (hasReturnPhoto) {
                         PhotoImage(
                             kind = PhotoStorage.KIND_RETURN,
@@ -303,12 +330,12 @@ fun RentalDetailScreen(
                         )
                     } else {
                         Text(
-                            "Belum ada foto pengembalian.",
+                            "Belum ada foto kondisi setelah disewa (wajib difoto saat alat dikembalikan).",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.error,
                         )
                     }
-                    if (isAdmin && r.status != RentalStatus.DIPESAN) {
+                    if (isAdmin && r.status == RentalStatus.DISEWA) {
                         Spacer(Modifier.height(8.dp))
                         PhotoPickerButtons(onPicked = vm::uploadReturnPhoto, enabled = !busy)
                     }
@@ -317,16 +344,36 @@ fun RentalDetailScreen(
                 if (isAdmin) {
                     Spacer(Modifier.height(16.dp))
                     when (r.status) {
-                        RentalStatus.DIPESAN -> LoadingButton(
-                            "Mulai Sewa (Tandai Disewa)",
-                            onClick = { confirmStatus = RentalStatus.DISEWA },
-                            loading = busy,
-                        )
-                        RentalStatus.DISEWA -> LoadingButton(
-                            "Tandai Dikembalikan",
-                            onClick = { confirmStatus = RentalStatus.DIKEMBALIKAN },
-                            loading = busy,
-                        )
+                        RentalStatus.DIPESAN -> {
+                            if (!hasPickupPhoto) {
+                                Text(
+                                    "Ambil/unggah foto kondisi sebelum disewa terlebih dahulu untuk mengaktifkan tombol di bawah.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                            LoadingButton(
+                                "Mulai Sewa (Tandai Disewa)",
+                                onClick = { confirmStatus = RentalStatus.DISEWA },
+                                loading = busy,
+                                enabled = hasPickupPhoto,
+                            )
+                        }
+                        RentalStatus.DISEWA -> {
+                            if (!hasReturnPhoto) {
+                                Text(
+                                    "Ambil/unggah foto kondisi setelah disewa terlebih dahulu untuk mengaktifkan tombol di bawah.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                            LoadingButton(
+                                "Tandai Dikembalikan",
+                                onClick = { confirmStatus = RentalStatus.DIKEMBALIKAN },
+                                loading = busy,
+                                enabled = hasReturnPhoto,
+                            )
+                        }
                         else -> {}
                     }
                 }
@@ -339,10 +386,9 @@ fun RentalDetailScreen(
         ConfirmDialog(
             title = if (toRented) "Mulai sewa?" else "Tandai dikembalikan?",
             message = if (toRented) {
-                "Status menjadi Disewa dan stok alat akan berkurang."
+                "Foto kondisi sebelum disewa sudah tercatat. Status menjadi Disewa dan stok alat akan berkurang."
             } else {
-                "Stok alat akan bertambah dan denda keterlambatan (jika ada) dihitung otomatis. " +
-                    "Disarankan mengunggah foto kondisi alat."
+                "Foto kondisi setelah disewa sudah tercatat. Stok alat akan bertambah dan denda keterlambatan (jika ada) dihitung otomatis."
             },
             confirmText = "Ya, lanjutkan",
             onConfirm = { vm.changeStatus(next); confirmStatus = null },
@@ -383,14 +429,15 @@ fun RentalFormScreen(
                 state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                 state.loadError != null -> ErrorState(state.loadError!!, vm::load, Modifier.align(Alignment.Center))
                 else -> {
-                    val equipment = state.selectedEquipment
-                    val qty = state.quantity.trim().toIntOrNull()
-                    val total = if (equipment != null && qty != null && qty > 0) {
-                        estimateTotal(state.rentDate, state.dueDate, equipment.dailyPrice, qty)
-                    } else {
-                        null
-                    }
+                    val equipmentMap = state.equipments.associateBy { it.id }
                     val days = rentalDays(state.rentDate, state.dueDate)
+                    val validLines = state.items.mapNotNull { item ->
+                        val eq = item.equipmentId?.let { equipmentMap[it] } ?: return@mapNotNull null
+                        val qty = item.quantity.trim().toIntOrNull()?.takeIf { it > 0 } ?: return@mapNotNull null
+                        val sub = estimateTotal(state.rentDate, state.dueDate, eq.dailyPrice, qty) ?: return@mapNotNull null
+                        Triple(eq, qty, sub)
+                    }
+                    val grandTotal = validLines.takeIf { it.isNotEmpty() }?.sumOf { it.third }
 
                     Column(
                         modifier = Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(20.dp),
@@ -412,19 +459,58 @@ fun RentalFormScreen(
                                 )
                             }
                         }
-                        DropdownField(
-                            label = "Alat",
-                            options = state.equipments.map {
-                                it.id to "${it.name} - ${formatRupiah(it.dailyPrice)}/hari (stok ${it.stock})"
-                            },
-                            selectedId = state.equipmentId,
-                            onSelected = { e -> vm.update { copy(equipmentId = e) } },
-                            error = state.errors["equipment"],
-                        )
-                        AppTextField(
-                            state.quantity, { vm.update { copy(quantity = it.filter(Char::isDigit)) } }, "Jumlah",
-                            error = state.errors["quantity"], keyboardType = KeyboardType.Number,
-                        )
+
+                        SectionTitle(if (vm.isEdit) "Alat yang Disewa" else "Daftar Alat yang Disewa")
+                        state.items.forEachIndexed { index, item ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
+                            ) {
+                                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    if (!vm.isEdit && state.items.size > 1) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                "Alat #${index + 1}",
+                                                modifier = Modifier.weight(1f),
+                                                style = MaterialTheme.typography.labelLarge,
+                                                fontWeight = FontWeight.SemiBold,
+                                            )
+                                            IconButton(onClick = { vm.removeItem(index) }) {
+                                                Icon(Icons.Filled.Delete, "Hapus alat", tint = MaterialTheme.colorScheme.error)
+                                            }
+                                        }
+                                    }
+                                    DropdownField(
+                                        label = "Pilih Alat",
+                                        options = state.equipments.map {
+                                            it.id to "${it.name} - ${formatRupiah(it.dailyPrice)}/hari (stok ${it.stock})"
+                                        },
+                                        selectedId = item.equipmentId,
+                                        onSelected = { e -> vm.updateItem(index) { copy(equipmentId = e) } },
+                                        error = state.errors["equipment_$index"],
+                                    )
+                                    AppTextField(
+                                        item.quantity,
+                                        { v -> vm.updateItem(index) { copy(quantity = v.filter(Char::isDigit)) } },
+                                        "Jumlah unit",
+                                        error = state.errors["quantity_$index"],
+                                        keyboardType = KeyboardType.Number,
+                                    )
+                                }
+                            }
+                        }
+
+                        if (!vm.isEdit) {
+                            androidx.compose.material3.OutlinedButton(
+                                onClick = vm::addItem,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Icon(Icons.Filled.Add, null)
+                                Text("  Tambah Alat Lain")
+                            }
+                        }
+
+                        Spacer(Modifier.height(4.dp))
                         DateField(
                             "Tanggal sewa", state.rentDate,
                             { v -> vm.update { copy(rentDate = v) } }, error = state.errors["rentDate"],
@@ -441,16 +527,18 @@ fun RentalFormScreen(
                             Column(Modifier.padding(16.dp)) {
                                 Text("Perkiraan Biaya", style = MaterialTheme.typography.labelLarge)
                                 Text(
-                                    if (total != null) formatRupiah(total) else "-",
+                                    if (grandTotal != null) formatRupiah(grandTotal) else "-",
                                     style = MaterialTheme.typography.headlineSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary,
                                 )
-                                if (total != null && equipment != null && days != null) {
-                                    Text(
-                                        "$days hari × ${formatRupiah(equipment.dailyPrice)} × $qty unit",
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
+                                if (days != null && validLines.isNotEmpty()) {
+                                    validLines.forEach { (eq, qty, sub) ->
+                                        Text(
+                                            "• ${eq.name}: $days hari × ${formatRupiah(eq.dailyPrice)} × $qty = ${formatRupiah(sub)}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    }
                                 }
                                 Text(
                                     "Denda keterlambatan: 10% dari harga sewa per hari.",

@@ -143,10 +143,23 @@ class RentalRepository(private val api: ApiService, private val photos: PhotoSto
 
     suspend fun delete(id: Int) = apiCall {
         api.deleteRental(id)
+        photos.deleteLocal(PhotoStorage.KIND_PICKUP, id)
         photos.deleteLocal(PhotoStorage.KIND_RETURN, id)
     }
 
-    /** Sama seperti foto alat: simpan lokal dulu, lalu unggah ke server. */
+    /** Foto kondisi sebelum disewa: simpan lokal dulu, lalu unggah ke server. */
+    suspend fun savePickupPhoto(id: Int, source: android.net.Uri): Pair<Rental?, String?> =
+        withContext(Dispatchers.IO) {
+            val file = try {
+                photos.saveToInternal(PhotoStorage.KIND_PICKUP, id, source)
+            } catch (e: Exception) {
+                return@withContext null to (e.message ?: "Gagal menyimpan foto")
+            }
+            val upload = apiCall { api.uploadPickupPhoto(id, photoPart(file)) }
+            upload.getOrNull() to upload.exceptionOrNull()?.message?.let { "Foto tersimpan di perangkat, tetapi gagal diunggah: $it" }
+        }
+
+    /** Foto kondisi setelah disewa (saat dikembalikan): simpan lokal dulu, lalu unggah ke server. */
     suspend fun saveReturnPhoto(id: Int, source: android.net.Uri): Pair<Rental?, String?> =
         withContext(Dispatchers.IO) {
             val file = try {

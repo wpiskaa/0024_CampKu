@@ -22,6 +22,11 @@ async function main() {
   let schema = fs.readFileSync(path.join(__dirname, '..', 'sql', 'schema.sql'), 'utf8');
   schema = schema.replace(/campku/g, dbName);
   await conn.query(schema);
+  // Pastikan kolom pickup_photo_path ada jika tabel lama sudah telanjur dibuat
+  const [cols] = await conn.query("SHOW COLUMNS FROM rentals LIKE 'pickup_photo_path'");
+  if (!cols.length) {
+    await conn.query('ALTER TABLE rentals ADD COLUMN pickup_photo_path VARCHAR(255) NULL AFTER status');
+  }
   console.log(`Skema database "${dbName}" siap.`);
 
   const adminEmail = (process.env.ADMIN_EMAIL || 'admin@campku.com').toLowerCase();
@@ -37,6 +42,15 @@ async function main() {
   }
 
   const [[{ n }]] = await conn.query('SELECT COUNT(*) AS n FROM categories');
+  const seedPhotos = {
+    'Tenda Dome Kapasitas 4': 'uploads/equipments/seed-tenda-4.jpg',
+    'Tenda Dome Kapasitas 2': 'uploads/equipments/seed-tenda-2.jpg',
+    'Carrier 60 Liter': 'uploads/equipments/seed-carrier-60l.jpg',
+    'Sleeping Bag Polar': 'uploads/equipments/seed-sleeping-bag.jpg',
+    'Kompor Portable Gas': 'uploads/equipments/seed-kompor.jpg',
+    'Headlamp LED': 'uploads/equipments/seed-headlamp.jpg',
+  };
+
   if (n === 0) {
     const cats = ['Tenda', 'Carrier', 'Sleeping Bag', 'Kompor', 'Aksesoris'];
     for (const c of cats) await conn.query('INSERT INTO categories (name) VALUES (?)', [c]);
@@ -44,19 +58,23 @@ async function main() {
     const [rows] = await conn.query('SELECT id, name FROM categories');
     const id = Object.fromEntries(rows.map((r) => [r.name, r.id]));
     const items = [
-      [id['Tenda'], 'Tenda Dome Kapasitas 4', 60000, 5, 'Tenda dome 4 orang, double layer, tahan hujan.'],
-      [id['Tenda'], 'Tenda Dome Kapasitas 2', 40000, 6, 'Tenda ringan untuk 2 orang, cocok untuk pendakian.'],
-      [id['Carrier'], 'Carrier 60 Liter', 35000, 8, 'Carrier 60L dengan rain cover dan back system nyaman.'],
-      [id['Sleeping Bag'], 'Sleeping Bag Polar', 15000, 10, 'Sleeping bag hangat bahan polar.'],
-      [id['Kompor'], 'Kompor Portable Gas', 10000, 7, 'Kompor lipat portable, hemat gas.'],
-      [id['Aksesoris'], 'Headlamp LED', 8000, 12, 'Headlamp LED terang dengan 3 mode cahaya.'],
+      [id['Tenda'], 'Tenda Dome Kapasitas 4', 60000, 5, 'Tenda dome 4 orang, double layer, tahan hujan.', seedPhotos['Tenda Dome Kapasitas 4']],
+      [id['Tenda'], 'Tenda Dome Kapasitas 2', 40000, 6, 'Tenda ringan untuk 2 orang, cocok untuk pendakian.', seedPhotos['Tenda Dome Kapasitas 2']],
+      [id['Carrier'], 'Carrier 60 Liter', 35000, 8, 'Carrier 60L dengan rain cover dan back system nyaman.', seedPhotos['Carrier 60 Liter']],
+      [id['Sleeping Bag'], 'Sleeping Bag Polar', 15000, 10, 'Sleeping bag hangat bahan polar.', seedPhotos['Sleeping Bag Polar']],
+      [id['Kompor'], 'Kompor Portable Gas', 10000, 7, 'Kompor lipat portable, hemat gas.', seedPhotos['Kompor Portable Gas']],
+      [id['Aksesoris'], 'Headlamp LED', 8000, 12, 'Headlamp LED terang dengan 3 mode cahaya.', seedPhotos['Headlamp LED']],
     ];
     for (const it of items) {
       await conn.query(
-        'INSERT INTO equipments (category_id, name, daily_price, stock, description) VALUES (?, ?, ?, ?, ?)', it
+        'INSERT INTO equipments (category_id, name, daily_price, stock, description, photo_path) VALUES (?, ?, ?, ?, ?, ?)', it
       );
     }
     console.log('Data contoh kategori dan alat ditambahkan.');
+  } else {
+    for (const [name, photoPath] of Object.entries(seedPhotos)) {
+      await conn.query('UPDATE equipments SET photo_path = ? WHERE name = ? AND photo_path IS NULL', [photoPath, name]);
+    }
   }
 
   await conn.end();

@@ -33,7 +33,11 @@ CampKu/
 
 ### 1. Backend
 
-Prasyarat: Node.js 18+ dan MySQL (mis. XAMPP, nyalakan modul MySQL).
+Prasyarat: Node.js 18+ dan MySQL (mis. **Laragon** atau XAMPP, nyalakan modul MySQL).
+
+**Cara paling cepat (Windows):** klik 2x file [`start-backend.bat`](start-backend.bat) di root proyek. Script tersebut otomatis menyalin `.env`, menginstal paket, membuat database + data contoh beserta gambar ilustrasi alat, lalu menjalankan server di `http://localhost:3000`.
+
+Atau secara manual melalui terminal:
 
 ```bash
 cd backend
@@ -71,11 +75,13 @@ Uji logika biaya/denda: `npm test`
 ## Alur Status Sewa
 
 ```
-Dipesan ──(Admin: Mulai Sewa, stok berkurang)──▶ Disewa ──(Admin: Dikembalikan, stok bertambah, denda dihitung)──▶ Dikembalikan
-                                                   │
-                                                   └─ lewat tanggal kembali ⇒ penanda "Terlambat" otomatis
+Dipesan ──(Admin: Foto Sebelum Sewa + Mulai Sewa, stok berkurang)──▶ Disewa ──(Admin: Foto Pengembalian + Dikembalikan, stok bertambah, denda dihitung)──▶ Dikembalikan
+                                                                        │
+                                                                        └─ lewat tanggal kembali ⇒ penanda "Terlambat" otomatis
 ```
 
+- **Pilih banyak alat sekaligus**: Saat membuat penyewaan baru, pengguna/admin dapat menambahkan beberapa jenis alat sekaligus dalam satu pengajuan.
+- **Wajib dokumentasi foto sebelum & sesudah sewa**: Perubahan status `Dipesan -> Disewa` mewajibkan foto kondisi alat sebelum disewa (`pickup_photo_path`), dan `Disewa -> Dikembalikan` mewajibkan foto kondisi alat saat dikembalikan (`return_photo_path`).
 - **Biaya sewa** = jumlah hari × harga sewa per hari × jumlah alat (sewa dan kembali di hari yang sama dihitung 1 hari).
 - **Denda** = hari terlambat × 10% × harga sewa per hari × jumlah alat. Untuk sewa yang masih berjalan, denda tampil sebagai hitungan berjalan sampai hari ini.
 - Data sewa hanya dapat diubah selama berstatus **Dipesan** agar stok tetap konsisten.
@@ -94,7 +100,7 @@ erDiagram
     categories { int id PK  string name UK  string description }
     equipments { int id PK  int category_id FK  string name  int daily_price  int stock  text description  string photo_path }
     customers { int id PK  int user_id FK  string name  string phone  string address  string id_number }
-    rentals { int id PK  int customer_id FK  int equipment_id FK  int processed_by FK  int quantity  date rent_date  date due_date  date return_date  int total_price  int late_fee  enum status  string return_photo_path }
+    rentals { int id PK  int customer_id FK  int equipment_id FK  int processed_by FK  int quantity  date rent_date  date due_date  date return_date  int total_price  int late_fee  enum status  string pickup_photo_path  string return_photo_path }
 ```
 
 ## Daftar Endpoint REST API
@@ -120,8 +126,9 @@ Semua endpoint selain register, login, dan refresh wajib header `Authorization: 
 | GET | `/api/rentals/:id` | Detail sewa | Login |
 | POST | `/api/rentals` | Buat penyewaan | Login |
 | PUT | `/api/rentals/:id` | Ubah penyewaan (status Dipesan) | Admin |
-| PATCH | `/api/rentals/:id/status` | Ubah status, stok, dan hitung denda | Admin |
-| POST | `/api/rentals/:id/return-photo` | Unggah foto pengembalian | Admin |
+| PATCH | `/api/rentals/:id/status` | Ubah status, stok, dan hitung denda (wajib foto) | Admin |
+| POST | `/api/rentals/:id/pickup-photo` | Unggah foto alat sebelum disewa | Admin |
+| POST | `/api/rentals/:id/return-photo` | Unggah foto alat setelah disewa (pengembalian) | Admin |
 | DELETE | `/api/rentals/:id` | Hapus penyewaan | Admin |
 | GET / POST / PUT / DELETE | `/api/users(/:id)?search=` | CRUDS pengguna | Admin |
 | GET | `/api/dashboard` | Ringkasan: alat tersedia, sewa aktif, terlambat | Admin |
@@ -141,7 +148,7 @@ Foto dari kamera atau galeri diperkecil lalu disimpan ke `context.filesDir/photo
 
 ## Progres Fitur
 
-- [x] Minggu 1: Setup repo, README, SRS, ERD, project Android + backend kosong, koneksi MySQL - [x] Minggu 2: Backend: register, login, JWT, refresh token, middleware peran - [x] Minggu 3: Android: tema, navigasi, layar Login dan Register, interceptor token - [x] Minggu 4: CRUDS Kategori dan Alat (backend + UI + MVVM), unggah foto - [x] Minggu 5: CRUDS Pelanggan dan Pengguna, role-based UI - [x] Minggu 6: CRUDS Penyewaan, hitung biaya, stok otomatis, denda, foto pengembalian - [ ] Minggu 7: Dashboard, validasi form, perbaikan bug, rapikan kode dan README
+- [x] Minggu 1: Setup repo, README, SRS, ERD, project Android + backend kosong, koneksi MySQL - [x] Minggu 2: Backend: register, login, JWT, refresh token, middleware peran - [x] Minggu 3: Android: tema, navigasi, layar Login dan Register, interceptor token - [x] Minggu 4: CRUDS Kategori dan Alat (backend + UI + MVVM), unggah foto - [x] Minggu 5: CRUDS Pelanggan dan Pengguna, role-based UI - [x] Minggu 6: CRUDS Penyewaan, hitung biaya, stok otomatis, denda, foto pengembalian - [x] Minggu 7: Dashboard, validasi form, perbaikan bug, rapikan kode dan README
 
 ### Checklist Kebutuhan (SRS)
 

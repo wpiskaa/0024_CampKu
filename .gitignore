@@ -19,4 +19,7 @@ backend/node_modules/
 backend/.env
 backend/uploads/*
 !backend/uploads/.gitkeep
+!backend/uploads/equipments/
+backend/uploads/equipments/*
+!backend/uploads/equipments/seed-*.jpg
 

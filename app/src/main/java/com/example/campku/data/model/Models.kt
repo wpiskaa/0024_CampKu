@@ -122,6 +122,7 @@ data class Rental(
     @SerializedName("total_price") val totalPrice: Int,
     @SerializedName("late_fee") val lateFee: Int,
     val status: String,
+    @SerializedName("pickup_photo_path") val pickupPhotoPath: String? = null,
     @SerializedName("return_photo_path") val returnPhotoPath: String?,
     val days: Int = 1,
     @SerializedName("is_late") val isLate: Boolean = false,

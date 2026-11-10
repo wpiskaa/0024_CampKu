@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+
+    <!-- Lingkaran badge latar hijau hutan -->
+    <path
+        android:fillColor="#1E4D2B"
+        android:pathData="M48,48m-46,0a46,46 0,1 1,92 0a46,46 0,1 1,-92 0" />
+
+    <!-- Lingkaran border tipis krem/emas -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeWidth="3"
+        android:strokeColor="#99D5A3"
+        android:pathData="M48,48m-43,0a43,43 0,1 1,86 0a43,43 0,1 1,-86 0" />
+
+    <!-- Matahari keemasan -->
+    <path
+        android:fillColor="#FFD56B"
+        android:pathData="M65,26m-6.5,0a6.5,6.5 0,1 1,13 0a6.5,6.5 0,1 1,-13 0" />
+
+    <!-- Gunung belakang -->
+    <path
+        android:fillColor="#4E9462"
+        android:pathData="M14,66 L38,28 L62,66 Z" />
+    <path
+        android:fillColor="#3B7A4E"
+        android:pathData="M42,66 L62,35 L82,66 Z" />
+
+    <!-- Salju puncak gunung -->
+    <path
+        android:fillColor="#E9F7EC"
+        android:pathData="M38,28 L31,39 L35.5,41 L38,37 L40.5,41 L45,39 Z" />
+
+    <!-- Tenda camping oranye di depan -->
+    <path
+        android:fillColor="#F07829"
+        android:pathData="M23,72 L48,40 L73,72 Z" />
+    <path
+        android:fillColor="#C95912"
+        android:pathData="M48,40 L73,72 L56,72 Z" />
+
+    <!-- Pintu tenda -->
+    <path
+        android:fillColor="#1A2E20"
+        android:pathData="M39,72 L48,52 L57,72 Z" />
+
+    <!-- Garis tiang pintu tenda -->
+    <path
+        android:fillColor="#FFF3E0"
+        android:pathData="M47,39.5 L49,39.5 L58.5,72 L56,72 L48,54 L40,72 L37.5,72 Z" />
+
+    <!-- Garis tanah rumput -->
+    <path
+        android:fillColor="#99D5A3"
+        android:pathData="M18,71 L78,71 C79.5,71 79.5,74.5 78,74.5 L18,74.5 C16.5,74.5 16.5,71 18,71 Z" />
+</vector>
+
