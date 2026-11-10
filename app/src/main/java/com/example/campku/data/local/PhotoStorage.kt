@@ -79,6 +79,7 @@ class PhotoStorage(private val context: Context) {
 
     companion object {
         const val KIND_EQUIPMENT = "equipment"
+        const val KIND_PICKUP = "pickup"
         const val KIND_RETURN = "return"
         private const val MAX_SIDE = 1280
     }

@@ -4,7 +4,7 @@ Aplikasi Android untuk mengelola rental alat camping: katalog alat, stok, penyew
 
 - **Android**: Kotlin, Jetpack Compose (Material 3), Navigation Compose, MVVM (ViewModel + StateFlow + Repository), Retrofit + OkHttp, Coil, DataStore. Tanpa XML layout dan tanpa Room.
 - **Backend**: Node.js, Express, MySQL, bcrypt, JSON Web Token, multer.
-- Dokumen kebutuhan: [`docs/SRS_CampKu.pdf`](docs/SRS_CampKu.pdf)
+- Dokumen kebutuhan: [`docs/SRS CampKu - Sistem Rental Alat Camping.docx`](docs/SRS%20CampKu%20-%20Sistem%20Rental%20Alat%20Camping.docx) · [`docs/SRS_CampKu.pdf`](docs/SRS_CampKu.pdf)
 
 ## Struktur Proyek
 
@@ -33,7 +33,11 @@ CampKu/
 
 ### 1. Backend
 
-Prasyarat: Node.js 18+ dan MySQL (mis. XAMPP, nyalakan modul MySQL).
+Prasyarat: Node.js 18+ dan MySQL (mis. **Laragon** atau XAMPP, nyalakan modul MySQL).
+
+**Cara paling cepat (Windows):** klik 2x file [`start-backend.bat`](start-backend.bat) di root proyek. Script tersebut otomatis menyalin `.env`, menginstal paket, membuat database + data contoh beserta gambar ilustrasi alat, lalu menjalankan server di `http://localhost:3000`.
+
+Atau secara manual melalui terminal:
 
 ```bash
 cd backend
@@ -71,11 +75,13 @@ Uji logika biaya/denda: `npm test`
 ## Alur Status Sewa
 
 ```
-Dipesan ──(Admin: Mulai Sewa, stok berkurang)──▶ Disewa ──(Admin: Dikembalikan, stok bertambah, denda dihitung)──▶ Dikembalikan
-                                                   │
-                                                   └─ lewat tanggal kembali ⇒ penanda "Terlambat" otomatis
+Dipesan ──(Admin: Foto Sebelum Sewa + Mulai Sewa, stok berkurang)──▶ Disewa ──(Admin: Foto Pengembalian + Dikembalikan, stok bertambah, denda dihitung)──▶ Dikembalikan
+                                                                        │
+                                                                        └─ lewat tanggal kembali ⇒ penanda "Terlambat" otomatis
 ```
 
+- **Pilih banyak alat sekaligus**: Saat membuat penyewaan baru, pengguna/admin dapat menambahkan beberapa jenis alat sekaligus dalam satu pengajuan.
+- **Wajib dokumentasi foto sebelum & sesudah sewa**: Perubahan status `Dipesan -> Disewa` mewajibkan foto kondisi alat sebelum disewa (`pickup_photo_path`), dan `Disewa -> Dikembalikan` mewajibkan foto kondisi alat saat dikembalikan (`return_photo_path`).
 - **Biaya sewa** = jumlah hari × harga sewa per hari × jumlah alat (sewa dan kembali di hari yang sama dihitung 1 hari).
 - **Denda** = hari terlambat × 10% × harga sewa per hari × jumlah alat. Untuk sewa yang masih berjalan, denda tampil sebagai hitungan berjalan sampai hari ini.
 - Data sewa hanya dapat diubah selama berstatus **Dipesan** agar stok tetap konsisten.
@@ -94,7 +100,7 @@ erDiagram
     categories { int id PK  string name UK  string description }
     equipments { int id PK  int category_id FK  string name  int daily_price  int stock  text description  string photo_path }
     customers { int id PK  int user_id FK  string name  string phone  string address  string id_number }
-    rentals { int id PK  int customer_id FK  int equipment_id FK  int processed_by FK  int quantity  date rent_date  date due_date  date return_date  int total_price  int late_fee  enum status  string return_photo_path }
+    rentals { int id PK  int customer_id FK  int equipment_id FK  int processed_by FK  int quantity  date rent_date  date due_date  date return_date  int total_price  int late_fee  enum status  string pickup_photo_path  string return_photo_path  timestamp created_at }
 ```
 
 ## Daftar Endpoint REST API
@@ -103,28 +109,34 @@ Semua endpoint selain register, login, dan refresh wajib header `Authorization: 
 
 | Method | Endpoint | Fungsi | Akses |
 |---|---|---|---|
-| POST | `/api/auth/register` | Daftar akun | Publik |
+| POST | `/api/auth/register` | Daftar akun penyewa baru | Publik |
 | POST | `/api/auth/login` | Login, dapat access + refresh token | Publik |
-| POST | `/api/auth/refresh` | Tukar refresh token (rotasi) | Publik |
-| POST | `/api/auth/logout` | Hapus refresh token | Login |
-| GET | `/api/auth/me` | Data akun sendiri | Login |
-| GET | `/api/equipments?search=&category_id=` | Daftar dan cari alat | Login |
-| GET | `/api/equipments/popular` | Alat paling sering disewa | Login |
+| POST | `/api/auth/refresh` | Tukar & rotasi refresh token baru | Publik |
+| POST | `/api/auth/logout` | Hapus refresh token di server | Login |
+| GET | `/api/auth/me` | Data profil akun sendiri | Login |
+| GET | `/api/equipments?search=&category_id=` | Daftar, cari, dan filter kategori alat | Login |
+| GET | `/api/equipments/popular` | Daftar 5 alat paling sering disewa | Login |
 | GET | `/api/equipments/:id` | Detail alat | Login |
 | POST, PUT, DELETE | `/api/equipments(/:id)` | Tambah, ubah, hapus alat | Admin |
 | POST | `/api/equipments/:id/photo` | Unggah foto alat (field `photo`) | Admin |
 | GET | `/api/categories?search=` | Daftar dan cari kategori | Login |
+| GET | `/api/categories/:id` | Detail kategori | Login |
 | POST, PUT, DELETE | `/api/categories(/:id)` | Tambah, ubah, hapus kategori | Admin |
-| GET / POST / PUT / DELETE | `/api/customers(/:id)?search=` | CRUDS pelanggan | Admin |
+| GET | `/api/customers?search=` | Daftar dan cari pelanggan (nama/HP) | Admin |
+| GET | `/api/customers/:id` | Detail pelanggan | Admin |
+| POST, PUT, DELETE | `/api/customers(/:id)` | Tambah, ubah, hapus pelanggan | Admin |
 | GET | `/api/rentals?search=&status=` | Daftar sewa (Penyewa: hanya miliknya) | Login |
 | GET | `/api/rentals/:id` | Detail sewa | Login |
-| POST | `/api/rentals` | Buat penyewaan | Login |
-| PUT | `/api/rentals/:id` | Ubah penyewaan (status Dipesan) | Admin |
-| PATCH | `/api/rentals/:id/status` | Ubah status, stok, dan hitung denda | Admin |
-| POST | `/api/rentals/:id/return-photo` | Unggah foto pengembalian | Admin |
-| DELETE | `/api/rentals/:id` | Hapus penyewaan | Admin |
-| GET / POST / PUT / DELETE | `/api/users(/:id)?search=` | CRUDS pengguna | Admin |
-| GET | `/api/dashboard` | Ringkasan: alat tersedia, sewa aktif, terlambat | Admin |
+| POST | `/api/rentals` | Buat penyewaan (status awal Dipesan) | Login |
+| PUT | `/api/rentals/:id` | Ubah penyewaan (hanya status Dipesan) | Admin |
+| PATCH | `/api/rentals/:id/status` | Ubah status, stok otomatis, hitung denda (wajib foto) | Admin |
+| POST | `/api/rentals/:id/pickup-photo` | Unggah foto kondisi alat sebelum disewa | Admin |
+| POST | `/api/rentals/:id/return-photo` | Unggah foto kondisi alat saat dikembalikan | Admin |
+| DELETE | `/api/rentals/:id` | Hapus penyewaan (kembalikan stok jika Disewa) | Admin |
+| GET | `/api/users?search=` | Daftar dan cari pengguna (nama/email) | Admin |
+| GET | `/api/users/:id` | Detail pengguna | Admin |
+| POST, PUT, DELETE | `/api/users(/:id)` | Tambah, ubah, hapus pengguna | Admin |
+| GET | `/api/dashboard` | Ringkasan dashboard laporan | Admin |
 
 Nilai `status` untuk filter: `dipesan`, `disewa`, `dikembalikan`, `terlambat`.
 
@@ -141,13 +153,19 @@ Foto dari kamera atau galeri diperkecil lalu disimpan ke `context.filesDir/photo
 
 ## Progres Fitur
 
-- [x] Minggu 1: Setup repo, README, SRS, ERD, project Android + backend kosong, koneksi MySQL - [x] Minggu 2: Backend: register, login, JWT, refresh token, middleware peran - [x] Minggu 3: Android: tema, navigasi, layar Login dan Register, interceptor token - [x] Minggu 4: CRUDS Kategori dan Alat (backend + UI + MVVM), unggah foto - [x] Minggu 5: CRUDS Pelanggan dan Pengguna, role-based UI - [x] Minggu 6: CRUDS Penyewaan, hitung biaya, stok otomatis, denda, foto pengembalian - [ ] Minggu 7: Dashboard, validasi form, perbaikan bug, rapikan kode dan README
+- [x] Minggu 1: Setup repo, README, SRS, ERD, project Android + backend kosong, koneksi MySQL
+- [x] Minggu 2: Backend: register, login, JWT, refresh token, middleware peran
+- [x] Minggu 3: Android: tema, navigasi, layar Login dan Register, interceptor token
+- [x] Minggu 4: CRUDS Kategori dan Alat (backend + UI + MVVM), unggah foto
+- [x] Minggu 5: CRUDS Pelanggan dan Pengguna, role-based UI
+- [x] Minggu 6: CRUDS Penyewaan, hitung biaya, stok otomatis, denda, foto sebelum & sesudah sewa
+- [x] Minggu 7: Dashboard, validasi form, perbaikan bug, unit test, rapikan kode dan README
 
 ### Checklist Kebutuhan (SRS)
 
-- [x] FR-01 Register · [x] FR-02 Login · [x] FR-03 Refresh token
+- [x] FR-01 Register · [x] FR-02 Login · [x] FR-03 Refresh token & Logout
 - [x] FR-04 CRUDS Alat · [x] FR-05 CRUDS Kategori · [x] FR-06 CRUDS Pelanggan
 - [x] FR-07 CRUDS Penyewaan · [x] FR-08 CRUDS Pengguna
 - [x] FR-09 Hitung biaya · [x] FR-10 Stok otomatis · [x] FR-11 Denda
-- [x] FR-12 Status sewa + penanda Terlambat · [x] FR-13 Validasi · [x] FR-14 File storage
+- [x] FR-12 Status sewa + penanda Terlambat · [x] FR-13 Validasi · [x] FR-14 File storage · [x] FR-15 Dashboard laporan
 

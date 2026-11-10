@@ -122,6 +122,10 @@ interface ApiService {
     suspend fun updateRentalStatus(@Path("id") id: Int, @Body body: StatusRequest): Rental
 
     @Multipart
+    @POST("api/rentals/{id}/pickup-photo")
+    suspend fun uploadPickupPhoto(@Path("id") id: Int, @Part photo: MultipartBody.Part): Rental
+
+    @Multipart
     @POST("api/rentals/{id}/return-photo")
     suspend fun uploadReturnPhoto(@Path("id") id: Int, @Part photo: MultipartBody.Part): Rental
 
