@@ -141,7 +141,7 @@ Foto dari kamera atau galeri diperkecil lalu disimpan ke `context.filesDir/photo
 
 ## Progres Fitur
 
-- [x] Minggu 1: Setup repo, README, SRS, ERD, project Android + backend kosong, koneksi MySQL - [x] Minggu 2: Backend: register, login, JWT, refresh token, middleware peran - [x] Minggu 3: Android: tema, navigasi, layar Login dan Register, interceptor token - [x] Minggu 4: CRUDS Kategori dan Alat (backend + UI + MVVM), unggah foto - [ ] Minggu 5: CRUDS Pelanggan dan Pengguna, role-based UI - [ ] Minggu 6: CRUDS Penyewaan, hitung biaya, stok otomatis, denda, foto pengembalian - [ ] Minggu 7: Dashboard, validasi form, perbaikan bug, rapikan kode dan README
+- [x] Minggu 1: Setup repo, README, SRS, ERD, project Android + backend kosong, koneksi MySQL - [x] Minggu 2: Backend: register, login, JWT, refresh token, middleware peran - [x] Minggu 3: Android: tema, navigasi, layar Login dan Register, interceptor token - [x] Minggu 4: CRUDS Kategori dan Alat (backend + UI + MVVM), unggah foto - [x] Minggu 5: CRUDS Pelanggan dan Pengguna, role-based UI - [ ] Minggu 6: CRUDS Penyewaan, hitung biaya, stok otomatis, denda, foto pengembalian - [ ] Minggu 7: Dashboard, validasi form, perbaikan bug, rapikan kode dan README
 
 ### Checklist Kebutuhan (SRS)
 
