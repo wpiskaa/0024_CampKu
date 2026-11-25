@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit
  */
 class AuthInterceptor(
     private val tokenStore: TokenStore,
-    private val baseUrl: String,
+    private val baseUrlProvider: () -> String,
 ) : Interceptor {
 
     private val gson = Gson()
@@ -82,7 +82,7 @@ class AuthInterceptor(
         }
 
         val body = gson.toJson(RefreshRequest(refreshToken)).toRequestBody(jsonType)
-        val request = Request.Builder().url("${baseUrl}api/auth/refresh").post(body).build()
+        val request = Request.Builder().url("${baseUrlProvider()}api/auth/refresh").post(body).build()
 
         refreshClient.newCall(request).execute().use { res ->
             return when {

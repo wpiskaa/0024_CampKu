@@ -2,13 +2,18 @@
 title CampKu Backend Server
 cd /d "%~dp0backend"
 
+if exist "%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe" (
+    echo [ADB] Menghubungkan port 3000 ke HP/Emulator via USB ^(adb reverse^)...
+    "%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe" reverse tcp:3000 tcp:3000 >nul 2>&1
+)
+
 if not exist ".env" (
     echo [0/3] Menyalin konfigurasi .env dari .env.example...
     copy /Y ".env.example" ".env" >nul
 )
 
 if not exist "node_modules" (
-    echo [1/3] Menginstal dependensi backend (npm install)...
+    echo [1/3] Menginstal dependensi backend ^(npm install^)...
     call npm install
     echo.
 )
@@ -19,5 +24,6 @@ echo.
 echo [3/3] Menjalankan server CampKu di http://localhost:3000 ...
 call npm start
 pause
+
 
 
