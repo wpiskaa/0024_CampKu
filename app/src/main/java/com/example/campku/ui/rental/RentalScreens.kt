@@ -114,6 +114,7 @@ import com.example.campku.util.formatRupiah
 import com.example.campku.util.rentalDays
 import com.example.campku.util.statusFilterLabel
 import com.example.campku.util.statusLabel
+import com.example.campku.util.todayIso
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 
@@ -654,25 +655,33 @@ fun RentalDetailScreen(
     var statusTarget by remember { mutableStateOf<Pair<Rental, String>?>(null) }
     var discountTarget by remember { mutableStateOf<Rental?>(null) }
     var receiptBundle by remember { mutableStateOf<Pair<Rental, List<Rental>>?>(null) }
+    var selectedDate by remember { mutableStateOf<String?>(null) }
 
     OnResume { vm.load() }
     MessageEffect(message, snackbar, vm::consumeMessage)
     LaunchedEffect(deleted) { if (deleted) onBack() }
 
     val primaryForActions = (state as? com.example.campku.ui.components.UiState.Success)?.data
-    val latestDateItems = if (primaryForActions != null) {
-        val list = if (customerRentals.isNotEmpty()) customerRentals else listOf(primaryForActions)
-        val latestDate = list.maxOf { it.rentDate }
-        list.filter { it.rentDate == latestDate }
+    val allItemsForActions = if (primaryForActions != null) {
+        if (customerRentals.isNotEmpty()) customerRentals else listOf(primaryForActions)
     } else emptyList()
+    val availableDatesForActions = remember(allItemsForActions) {
+        allItemsForActions.map { it.rentDate }.distinct().sortedDescending()
+    }
+    val activeDate = selectedDate?.takeIf { it in availableDatesForActions }
+        ?: primaryForActions?.rentDate
+        ?: availableDatesForActions.firstOrNull()
+    val activeDateItems = remember(allItemsForActions, activeDate) {
+        if (activeDate == null) emptyList() else allItemsForActions.filter { it.rentDate == activeDate }
+    }
 
     SubScreen(
         title = if (isAdmin) "Detail Sewa Pelanggan" else "Detail Sewa",
         onBack = onBack,
         snackbarHostState = snackbar,
         actions = {
-            if (latestDateItems.isNotEmpty()) {
-                IconButton(onClick = { receiptBundle = latestDateItems.first() to latestDateItems }) {
+            if (activeDateItems.isNotEmpty()) {
+                IconButton(onClick = { receiptBundle = activeDateItems.first() to activeDateItems }) {
                     Icon(Icons.Filled.ReceiptLong, contentDescription = "Nota Digital")
                 }
             }
@@ -686,6 +695,10 @@ fun RentalDetailScreen(
                     .sortedByDescending { it.key }
                     .map { it.key to it.value }
             }
+            val currentSelectedDate = activeDate ?: primary.rentDate
+            val currentGroup = dateGroups.firstOrNull { it.first == currentSelectedDate } ?: dateGroups.first()
+            val today = remember { todayIso() }
+            val yesterday = remember { addDaysIso(today, -1) }
 
             Column(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -729,37 +742,69 @@ fun RentalDetailScreen(
                     }
                 }
 
-                // 2. Dipisahkan per Tanggal/Hari Sewa (sewa kemarin tidak digabung dengan hari ini)
-                dateGroups.forEach { (rentDate, rentalsOnDate) ->
-                    val groupPrimary = rentalsOnDate.first()
-                    DateRentalSectionHeader(
-                        rentDate = rentDate,
-                        rentals = rentalsOnDate,
+                // 2. Filter Pilih Tanggal Sewa (memisahkan sewa hari ini, kemarin, dan tanggal lainnya)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        "Pilih Tanggal Sewa",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    BookingPassCard(
-                        primary = groupPrimary,
-                        items = rentalsOnDate,
-                        onOpenReceipt = { receiptBundle = groupPrimary to rentalsOnDate },
-                    )
-                    rentalsOnDate.forEachIndexed { index, r ->
-                        RentalEquipmentDetailCard(
-                            index = index + 1,
-                            r = r,
-                            isAdmin = isAdmin,
-                            busy = busy,
-                            photoVersion = photoVersion,
-                            storage = storage,
-                            onEdit = { onEdit(r.id) },
-                            onDelete = { deleteTarget = r },
-                            onApplyBonusDay = { vm.applyBonusDay(r.id) },
-                            onOpenDiscount = { discountTarget = r },
-                            onUploadPickupPhoto = { uri -> vm.uploadPickupPhoto(r.id, uri) },
-                            onUploadReturnPhoto = { uri -> vm.uploadReturnPhoto(r.id, uri) },
-                            onConfirmStatus = { nextStatus -> statusTarget = r to nextStatus },
-                        )
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(dateGroups, key = { it.first }) { (dateStr, listOnDate) ->
+                            val tag = when (dateStr) {
+                                today -> "Hari Ini • ${formatDisplayDate(dateStr)}"
+                                yesterday -> "Kemarin • ${formatDisplayDate(dateStr)}"
+                                else -> formatDisplayDate(dateStr)
+                            }
+                            FilterChip(
+                                selected = dateStr == currentGroup.first,
+                                onClick = { selectedDate = dateStr },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Filled.DateRange,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                },
+                                label = {
+                                    Text("$tag • ${listOnDate.size}", fontWeight = FontWeight.SemiBold)
+                                },
+                            )
+                        }
                     }
-                    Spacer(Modifier.height(4.dp))
                 }
+
+                // 3. Rincian Sewa Khusus Tanggal yang Dipilih
+                val (rentDate, rentalsOnDate) = currentGroup
+                val groupPrimary = rentalsOnDate.first()
+                DateRentalSectionHeader(
+                    rentDate = rentDate,
+                    rentals = rentalsOnDate,
+                )
+                BookingPassCard(
+                    primary = groupPrimary,
+                    items = rentalsOnDate,
+                    onOpenReceipt = { receiptBundle = groupPrimary to rentalsOnDate },
+                )
+                rentalsOnDate.forEachIndexed { index, r ->
+                    RentalEquipmentDetailCard(
+                        index = index + 1,
+                        r = r,
+                        isAdmin = isAdmin,
+                        busy = busy,
+                        photoVersion = photoVersion,
+                        storage = storage,
+                        onEdit = { onEdit(r.id) },
+                        onDelete = { deleteTarget = r },
+                        onApplyBonusDay = { vm.applyBonusDay(r.id) },
+                        onOpenDiscount = { discountTarget = r },
+                        onUploadPickupPhoto = { uri -> vm.uploadPickupPhoto(r.id, uri) },
+                        onUploadReturnPhoto = { uri -> vm.uploadReturnPhoto(r.id, uri) },
+                        onConfirmStatus = { nextStatus -> statusTarget = r to nextStatus },
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
             }
         }
     }
