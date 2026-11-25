@@ -1,9 +1,12 @@
 package com.example.campku.ui.navigation
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -12,20 +15,21 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.ManageAccounts
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -37,13 +41,15 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -95,9 +101,7 @@ private data class Tab(
     val isCenter: Boolean = false,
 )
 
-/**
- * Menu bawah Penyewa: 5 tab dengan Beranda tepat di tengah (posisi ke-3).
- */
+/** Menu bawah Penyewa: 5 tab, Beranda tepat di tengah. */
 private val userTabs = listOf(
     Tab(Routes.EQUIPMENTS, "Alat", Icons.Filled.Terrain),
     Tab(Routes.CATEGORIES, "Kategori", Icons.Filled.Category),
@@ -107,21 +111,19 @@ private val userTabs = listOf(
 )
 
 /**
- * Menu bawah Admin: 6 tab dengan Beranda di tengah (posisi ke-3).
- * Menu Pengguna juga tetap dapat diakses melalui halaman Profil & Pengaturan atau Beranda Admin.
+ * Menu bawah Admin: 5 tab, Beranda tepat di tengah.
+ * Kategori dan Pengguna tetap bisa dibuka lewat pintasan di Beranda dan menu Profil.
  */
 private val adminTabs = listOf(
     Tab(Routes.EQUIPMENTS, "Alat", Icons.Filled.Terrain),
-    Tab(Routes.CATEGORIES, "Kategori", Icons.Filled.Category),
-    Tab(Routes.HOME_ADMIN, "Beranda", Icons.Filled.Home, isCenter = true),
     Tab(Routes.RENTALS, "Sewa", Icons.Filled.Receipt),
+    Tab(Routes.HOME_ADMIN, "Beranda", Icons.Filled.Home, isCenter = true),
     Tab(Routes.CUSTOMERS, "Pelanggan", Icons.Filled.Group),
     Tab(Routes.PROFILE, "Profil", Icons.Filled.Person),
 )
 
 /**
- * Kerangka layar utama (tab): top bar + menu bawah.
- * Admin memiliki menu tambahan (Kategori, Pelanggan, Pengguna), sehingga menu bawahnya dapat digeser.
+ * Kerangka layar utama (tab): top bar terang + dock menu bawah dengan tombol Beranda melayang di tengah.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -136,25 +138,41 @@ fun MainScreen(
 ) {
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Image(
-                            painter = painterResource(id = R.drawable.ic_campku_logo),
-                            contentDescription = "Logo CampKu",
-                            modifier = Modifier.size(34.dp),
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                },
-                actions = actions,
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                ),
-            )
+            Column {
+                TopAppBar(
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                shadowElevation = 1.dp,
+                            ) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.ic_campku_logo),
+                                    contentDescription = "Logo CampKu",
+                                    modifier = Modifier.padding(3.dp).size(32.dp),
+                                )
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                title,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                fontWeight = FontWeight.ExtraBold,
+                                style = MaterialTheme.typography.titleLarge,
+                            )
+                        }
+                    },
+                    actions = actions,
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background,
+                        titleContentColor = MaterialTheme.colorScheme.onBackground,
+                        actionIconContentColor = MaterialTheme.colorScheme.onBackground,
+                    ),
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            }
         },
         bottomBar = { AppBottomBar(navController, isAdmin) },
         snackbarHost = { snackbarHostState?.let { SnackbarHost(it) } },
@@ -163,109 +181,124 @@ fun MainScreen(
     )
 }
 
+/**
+ * Dock menu bawah: latar putih, garis tipis di atas, 5 tab,
+ * dan tombol Beranda bundar di tengah yang menonjol ke atas (digambar di luar dock agar tidak terpotong).
+ */
 @Composable
 private fun AppBottomBar(navController: NavHostController, isAdmin: Boolean) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val tabs = if (isAdmin) adminTabs else userTabs
     val homeRoute = Routes.home(isAdmin)
+    val primary = MaterialTheme.colorScheme.primary
 
-    Surface(
-        shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
-        tonalElevation = 0.dp,
-        shadowElevation = 16.dp,
-        color = MaterialTheme.colorScheme.surface,
-    ) {
-        Row(
-            modifier = Modifier
-                .navigationBarsPadding()
-                .fillMaxWidth()
-                .height(72.dp)
-                .padding(horizontal = 6.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            tabs.forEach { tab ->
-                BottomItem(
-                    selected = currentRoute == tab.route,
-                    label = tab.label,
-                    icon = tab.icon,
-                    isCenter = tab.isCenter,
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        if (currentRoute != tab.route) {
-                            navController.navigate(tab.route) {
-                                popUpTo(homeRoute) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        }
-                    },
-                )
+    fun go(route: String) {
+        if (currentRoute != route) {
+            navController.navigate(route) {
+                popUpTo(homeRoute) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
             }
+        }
+    }
+
+    Box(Modifier.fillMaxWidth()) {
+        Surface(
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = 14.dp,
+        ) {
+            Column(Modifier.navigationBarsPadding()) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(66.dp)
+                        .padding(horizontal = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    tabs.forEach { tab ->
+                        val selected = currentRoute == tab.route
+                        if (tab.isCenter) {
+                            // Slot tengah: hanya label (tombol bundar digambar di atas dock)
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                    ) { go(tab.route) }
+                                    .padding(vertical = 6.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                            ) {
+                                Spacer(Modifier.height(24.dp))
+                                Spacer(Modifier.height(3.dp))
+                                Text(
+                                    tab.label,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = primary,
+                                    maxLines = 1,
+                                )
+                            }
+                        } else {
+                            NavItem(tab, selected, { go(tab.route) }, Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+        }
+
+        // Tombol Beranda bundar yang menonjol ke atas dengan cincin putih
+        val centerTab = tabs.first { it.isCenter }
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .offset(y = (-24).dp)
+                .size(60.dp)
+                .shadow(10.dp, CircleShape, ambientColor = primary, spotColor = primary)
+                .background(MaterialTheme.colorScheme.surface, CircleShape)
+                .padding(4.dp)
+                .background(
+                    Brush.linearGradient(listOf(primary, primary.copy(alpha = 0.78f))),
+                    CircleShape,
+                )
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) { go(centerTab.route) },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                centerTab.icon,
+                contentDescription = centerTab.label,
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(26.dp),
+            )
         }
     }
 }
 
 @Composable
-private fun BottomItem(
-    selected: Boolean,
-    label: String,
-    icon: ImageVector,
-    isCenter: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val primary = MaterialTheme.colorScheme.primary
-    // Hanya tab yang sedang aktif yang disorot; Beranda (tengah) hanya sedikit lebih besar.
-    val iconTint = when {
-        selected && isCenter -> MaterialTheme.colorScheme.onPrimary
-        selected -> primary
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    val pillColor = when {
-        selected && isCenter -> primary
-        selected -> MaterialTheme.colorScheme.primaryContainer
-        else -> Color.Transparent
-    }
+private fun NavItem(tab: Tab, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     Column(
         modifier = modifier
-            .clickable(
-                interactionSource = androidx.compose.runtime.remember {
-                    androidx.compose.foundation.interaction.MutableInteractionSource()
-                },
-                indication = null,
-                onClick = onClick,
-            )
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
             .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Surface(
-            shape = RoundedCornerShape(if (isCenter) 18.dp else 14.dp),
-            color = pillColor,
-            shadowElevation = if (selected && isCenter) 4.dp else 0.dp,
-        ) {
-            Icon(
-                icon,
-                contentDescription = label,
-                tint = iconTint,
-                modifier = Modifier
-                    .padding(
-                        horizontal = if (isCenter) 22.dp else 16.dp,
-                        vertical = if (isCenter) 6.dp else 7.dp,
-                    )
-                    .size(if (isCenter) 24.dp else 22.dp),
-            )
-        }
+        Icon(tab.icon, contentDescription = tab.label, tint = tint, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.height(3.dp))
         Text(
-            label,
+            tab.label,
             style = MaterialTheme.typography.labelSmall,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            color = if (selected) primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.SemiBold,
+            color = tint,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 2.dp),
         )
     }
 }

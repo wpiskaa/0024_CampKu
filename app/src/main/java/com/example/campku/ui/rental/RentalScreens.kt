@@ -850,8 +850,10 @@ fun RentalFormScreen(
                                                 fontWeight = FontWeight.SemiBold,
                                             )
                                             Text(
-                                                if (eligibleForBonus) {
+                                                if (effectiveBonus) {
                                                     "Aktif: Tanggal kembali menjadi ${formatDisplayDate(finalDueDatePreview)} (bayar $baseDays hari, dapat ${(baseDays ?: 2) + 1} hari)"
+                                                } else if (eligibleForBonus) {
+                                                    "Nyalakan untuk memberi 1 hari gratis (bayar $baseDays hari, dapat ${(baseDays ?: 2) + 1} hari)"
                                                 } else {
                                                     "Pilih durasi minimal 2 hari untuk mengaktifkan bonus +1 hari"
                                                 },
@@ -1061,7 +1063,8 @@ fun RentalFormScreen(
 
                         Card(
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                            modifier = Modifier.padding(vertical = 4.dp),
+                            shape = RoundedCornerShape(20.dp),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         ) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text("Ringkasan & Perkiraan Biaya", style = MaterialTheme.typography.labelLarge)

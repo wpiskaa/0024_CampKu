@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CardGiftcard
+import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.ManageAccounts
@@ -87,13 +88,25 @@ fun HomeScreen(navController: NavHostController, user: User) {
                         loading = false,
                     )
                     if (isAdmin) {
-                        OutlinedButton(
-                            onClick = { navController.navigate(Routes.USERS) },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Icon(Icons.Filled.ManageAccounts, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Kelola Akun Pengguna (${data.summary.totalCustomers} Pelanggan)")
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            OutlinedButton(
+                                onClick = { navController.navigate(Routes.CATEGORIES) },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(14.dp),
+                            ) {
+                                Icon(Icons.Filled.Category, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Kategori")
+                            }
+                            OutlinedButton(
+                                onClick = { navController.navigate(Routes.USERS) },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(14.dp),
+                            ) {
+                                Icon(Icons.Filled.ManageAccounts, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Pengguna")
+                            }
                         }
                     }
                     Spacer(Modifier.height(4.dp))
@@ -205,10 +218,11 @@ private fun PromoBanner(isAdmin: Boolean) {
 private fun Greeting(user: User) {
     Box(
         modifier = Modifier
+            .padding(start = 16.dp, end = 16.dp, top = 14.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
+            .clip(RoundedCornerShape(24.dp))
             .background(MaterialTheme.colorScheme.primary)
-            .padding(start = 20.dp, end = 20.dp, bottom = 28.dp, top = 8.dp),
+            .padding(horizontal = 20.dp, vertical = 22.dp),
     ) {
         Column {
             Text(
