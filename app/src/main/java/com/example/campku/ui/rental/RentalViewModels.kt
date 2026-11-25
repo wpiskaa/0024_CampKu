@@ -52,10 +52,14 @@ class RentalListViewModel(private val repo: RentalRepository) : ListViewModel<Re
 
 /**
  * Detail sewa per pelanggan/transaksi + aksi Admin:
- * menampilkan seluruh barang yang disewa oleh penyewa tersebut, ubah status (FR-10..FR-12),
- * pemberian promo bonus +1 hari oleh Admin, foto sebelum & sesudah sewa, serta hapus.
+ * - Admin   : menampilkan seluruh barang yang disewa oleh orang penyewa tersebut.
+ * - Penyewa : menampilkan barang pada tanggal sewa yang sama agar beda hari tidak tercampur.
  */
-class RentalDetailViewModel(private val repo: RentalRepository, private val id: Int) : ViewModel() {
+class RentalDetailViewModel(
+    private val repo: RentalRepository,
+    private val id: Int,
+    private val isAdmin: Boolean = false,
+) : ViewModel() {
     private val _state = MutableStateFlow<UiState<Rental>>(UiState.Loading)
     val state: StateFlow<UiState<Rental>> = _state.asStateFlow()
 
@@ -87,8 +91,11 @@ class RentalDetailViewModel(private val repo: RentalRepository, private val id: 
             if (silent && result.isFailure && _state.value is UiState.Success) return@launch
             result.onSuccess { primary ->
                 val allForCustomer = repo.list(null, null).getOrNull()
-                    ?.filter { it.customerId == primary.customerId && it.rentDate == primary.rentDate }
-                    ?.sortedWith(compareBy<Rental> { it.id != primary.id }.thenByDescending { it.id })
+                    ?.filter {
+                        if (isAdmin) it.customerId == primary.customerId
+                        else it.customerId == primary.customerId && it.rentDate == primary.rentDate
+                    }
+                    ?.sortedWith(compareByDescending<Rental> { it.rentDate }.thenByDescending { it.id })
                     ?: listOf(primary)
                 _customerRentals.value = allForCustomer
             }

@@ -358,7 +358,7 @@ fun PackagePlannerScreen(
                                     AppTextField(
                                         value = state.daysInput,
                                         onValueChange = vm::onDaysChange,
-                                        label = "Durasi (Hari)",
+                                        label = "Durasi Hari",
                                         keyboardType = KeyboardType.Number,
                                         modifier = Modifier.weight(1f),
                                     )
@@ -552,7 +552,7 @@ fun PackagePlannerScreen(
                             }
 
                             LoadingButton(
-                                text = "Ajukan Sewa Paket ($totalUnits Unit)",
+                                text = "Ajukan Sewa Paket",
                                 onClick = vm::submitPackage,
                                 loading = state.saving,
                                 enabled = selectedItems.isNotEmpty(),

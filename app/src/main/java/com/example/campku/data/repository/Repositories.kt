@@ -2,6 +2,7 @@ package com.example.campku.data.repository
 
 import com.example.campku.data.local.PhotoStorage
 import com.example.campku.data.local.TokenStore
+import com.example.campku.data.model.AppNotification
 import com.example.campku.data.model.Category
 import com.example.campku.data.model.CategoryRequest
 import com.example.campku.data.model.Customer
@@ -195,5 +196,6 @@ class UserRepository(private val api: ApiService) {
 class DashboardRepository(private val api: ApiService) {
     suspend fun get(): Result<Dashboard> = apiCall { api.getDashboard() }
     suspend fun report(): Result<RevenueReport> = apiCall { api.getRevenueReport() }
+    suspend fun notifications(): Result<List<AppNotification>> = apiCall { api.getNotifications() }
 }
 

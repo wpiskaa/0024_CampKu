@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.CheckCircle
@@ -200,11 +201,8 @@ fun RentalListScreen(navController: NavHostController, isAdmin: Boolean) {
         snackbarHostState = snackbar,
         actions = {
             if (isAdmin) {
-                IconButton(onClick = { startQrCameraScan() }) {
-                    Icon(Icons.Filled.QrCodeScanner, contentDescription = "Scan QR Booking Pass")
-                }
                 IconButton(onClick = { showCodeLookup = true }) {
-                    Icon(Icons.Filled.QrCode2, contentDescription = "Input manual kode booking")
+                    Icon(Icons.Filled.QrCodeScanner, contentDescription = "Scan QR atau Kode Booking")
                 }
             }
         },
@@ -241,14 +239,14 @@ fun RentalListScreen(navController: NavHostController, isAdmin: Boolean) {
                     )
                 } else if (isAdmin) {
                     val groups = remember(list) {
-                        list.groupBy { it.customerId to it.rentDate }
-                            .map { (key, rentals) ->
+                        list.groupBy { it.customerId }
+                            .map { (custId, rentals) ->
                                 val first = rentals.first()
                                 CustomerRentalGroup(
-                                    customerId = key.first,
+                                    customerId = custId,
                                     customerName = first.customerName,
                                     customerPhone = first.customerPhone,
-                                    rentDate = key.second,
+                                    rentDate = first.rentDate,
                                     rentals = rentals,
                                 )
                             }
@@ -258,7 +256,7 @@ fun RentalListScreen(navController: NavHostController, isAdmin: Boolean) {
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 88.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        items(groups, key = { it.groupKey }) { group ->
+                        items(groups, key = { it.customerId }) { group ->
                             CustomerRentalGroupCard(group) {
                                 navController.navigate(Routes.rentalDetail(group.primaryId)) { launchSingleTop = true }
                             }
@@ -535,15 +533,14 @@ private fun DateRentalSectionHeader(rentDate: String, rentals: List<Rental>) {
     }
 }
 
-/** Kartu daftar penyewa untuk Admin: menampilkan nama orang penyewa + tanggal sewa; saat diklik baru mendetail barangnya. */
+/** Kartu daftar penyewa untuk Admin: cukup tampilkan Orang Penyewanya saja; pas dibuka baru mendetail barangnya. */
 @Composable
 private fun CustomerRentalGroupCard(group: CustomerRentalGroup, onClick: () -> Unit) {
     val rep = group.representative
-    val hasBonus = group.rentals.any { it.bonusDays > 0 }
     ListCard(onClick = onClick) {
         Box(
             modifier = Modifier
-                .size(48.dp)
+                .size(46.dp)
                 .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
@@ -551,55 +548,33 @@ private fun CustomerRentalGroupCard(group: CustomerRentalGroup, onClick: () -> U
                 Icons.Filled.Person,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(26.dp),
+                modifier = Modifier.size(24.dp),
             )
         }
         Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    group.customerName,
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                StatusChip(rep.statusLabel(), rep.statusColor())
-            }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                "Tgl Sewa: ${formatDisplayDate(group.rentDate)}" +
-                    (group.customerPhone?.takeIf { it.isNotBlank() && it != "-" }?.let { "  •  $it" } ?: ""),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                group.customerName,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-            Text(
-                "${group.rentals.size} jenis barang (${group.totalUnits} unit) • Ketuk untuk detail barang",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.secondary,
-                fontWeight = FontWeight.Medium,
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            group.customerPhone?.takeIf { it.isNotBlank() && it != "-" }?.let { phone ->
                 Text(
-                    formatRupiah(group.totalAmount),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
+                    phone,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (hasBonus) {
-                    Text(
-                        "🎁 Promo +1 Hari",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.secondary,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
             }
         }
+        StatusChip(rep.statusLabel(), rep.statusColor())
+        Spacer(Modifier.width(4.dp))
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -664,7 +639,7 @@ fun RentalDetailScreen(
     onBack: () -> Unit,
     onEdit: (Int) -> Unit,
 ) {
-    val vm = appViewModel(key = "rental_detail_$id") { RentalDetailViewModel(it.rentalRepository, id) }
+    val vm = appViewModel(key = "rental_detail_${id}_$isAdmin") { RentalDetailViewModel(it.rentalRepository, id, isAdmin) }
     val state by vm.state.collectAsStateWithLifecycle()
     val customerRentals by vm.customerRentals.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
@@ -1024,7 +999,7 @@ private fun RentalEquipmentDetailCard(
             if ((isAdmin && r.status != RentalStatus.DIPESAN) || hasReturnPhoto) {
                 HorizontalDivider(Modifier.padding(vertical = 4.dp))
                 Text(
-                    "Foto Kondisi Setelah Disewa (Saat Dikembalikan)",
+                    "Foto Kondisi Setelah Disewa",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                 )
@@ -1153,7 +1128,7 @@ fun RentalFormScreen(
                             }
                         }
 
-                        SectionTitle(if (vm.isEdit) "Barang yang Disewa" else "Pilih Barang Camping (Dengan Foto & Detail)")
+                        SectionTitle(if (vm.isEdit) "Barang yang Disewa" else "Pilih Barang Camping")
                         state.items.forEachIndexed { index, item ->
                             val selectedEq = item.equipmentId?.let { equipmentMap[it] }
                             val eqError = state.errors["equipment_$index"]
@@ -1242,7 +1217,7 @@ fun RentalFormScreen(
                                         ) {
                                             Icon(Icons.Filled.ShoppingBag, contentDescription = null, modifier = Modifier.size(18.dp))
                                             Spacer(Modifier.width(8.dp))
-                                            Text("Ganti Barang Lain (Lihat Foto Katalog)")
+                                            Text("Ganti Barang")
                                         }
                                     } else {
                                         Button(
@@ -1252,7 +1227,7 @@ fun RentalFormScreen(
                                         ) {
                                             Icon(Icons.Filled.ShoppingBag, contentDescription = null)
                                             Spacer(Modifier.width(8.dp))
-                                            Text("Pilih Barang Camping (Lihat Foto & Detail)")
+                                            Text("Pilih Barang Camping")
                                         }
                                     }
 
@@ -1339,7 +1314,7 @@ fun RentalFormScreen(
                                         Icon(Icons.Filled.LocalOffer, null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(18.dp))
                                         Spacer(Modifier.width(8.dp))
                                         Text(
-                                            "Diskon & Bonus (Khusus Admin)",
+                                            "Diskon & Bonus",
                                             style = MaterialTheme.typography.titleSmall,
                                             fontWeight = FontWeight.Bold,
                                         )
@@ -1360,7 +1335,7 @@ fun RentalFormScreen(
                                             val clamped = digits.toIntOrNull()?.coerceIn(0, 100)?.toString() ?: ""
                                             vm.update { copy(discountPercent = clamped) }
                                         },
-                                        label = "Diskon Custom (0 - 100%)",
+                                        label = "Diskon Custom %",
                                         keyboardType = KeyboardType.Number,
                                     )
                                     HorizontalDivider()
@@ -1370,7 +1345,7 @@ fun RentalFormScreen(
                                     ) {
                                         Column(Modifier.weight(1f)) {
                                             Text(
-                                                "Bonus +1 Hari Gratis (Sewa ≥ 2 Hari)",
+                                                "Bonus +1 Hari Gratis",
                                                 style = MaterialTheme.typography.labelLarge,
                                                 fontWeight = FontWeight.SemiBold,
                                             )

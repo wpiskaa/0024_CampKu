@@ -1,5 +1,6 @@
 package com.example.campku.ui.home
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,6 +36,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -88,44 +90,49 @@ fun HomeScreen(navController: NavHostController, user: User) {
                         onClick = { navController.navigate(Routes.rentalForm()) { launchSingleTop = true } },
                         loading = false,
                     )
-                    OutlinedButton(
-                        onClick = { navController.navigate(Routes.PACKAGE_PLANNER) { launchSingleTop = true } },
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                        shape = RoundedCornerShape(14.dp),
-                    ) {
-                        Icon(Icons.Filled.AutoAwesome, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Paket Otomatis (Hitung Kebutuhan Camping)")
-                    }
                     if (isAdmin) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            AdminQuickTile(
+                                label = "Paket",
+                                icon = Icons.Filled.AutoAwesome,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.weight(1f),
+                                onClick = { navController.navigate(Routes.PACKAGE_PLANNER) { launchSingleTop = true } },
+                            )
+                            AdminQuickTile(
+                                label = "Laporan",
+                                icon = Icons.Filled.BarChart,
+                                color = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.weight(1f),
+                                onClick = { navController.navigate(Routes.REPORTS) { launchSingleTop = true } },
+                            )
+                            AdminQuickTile(
+                                label = "Kategori",
+                                icon = Icons.Filled.Category,
+                                color = StatusRented,
+                                modifier = Modifier.weight(1f),
+                                onClick = { navController.navigate(Routes.CATEGORIES) { launchSingleTop = true } },
+                            )
+                            AdminQuickTile(
+                                label = "Pengguna",
+                                icon = Icons.Filled.ManageAccounts,
+                                color = StatusOrdered,
+                                modifier = Modifier.weight(1f),
+                                onClick = { navController.navigate(Routes.USERS) { launchSingleTop = true } },
+                            )
+                        }
+                    } else {
                         OutlinedButton(
-                            onClick = { navController.navigate(Routes.REPORTS) { launchSingleTop = true } },
+                            onClick = { navController.navigate(Routes.PACKAGE_PLANNER) { launchSingleTop = true } },
                             modifier = Modifier.fillMaxWidth().height(48.dp),
                             shape = RoundedCornerShape(14.dp),
                         ) {
-                            Icon(Icons.Filled.BarChart, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Filled.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Laporan Pendapatan & Grafik Statistik")
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            OutlinedButton(
-                                onClick = { navController.navigate(Routes.CATEGORIES) { launchSingleTop = true } },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(14.dp),
-                            ) {
-                                Icon(Icons.Filled.Category, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text("Kategori")
-                            }
-                            OutlinedButton(
-                                onClick = { navController.navigate(Routes.USERS) { launchSingleTop = true } },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(14.dp),
-                            ) {
-                                Icon(Icons.Filled.ManageAccounts, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text("Pengguna")
-                            }
+                            Text("Paket Otomatis")
                         }
                     }
                     Spacer(Modifier.height(4.dp))
@@ -229,6 +236,46 @@ private fun PromoBanner(isAdmin: Boolean) {
                     color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.9f),
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun AdminQuickTile(
+    label: String,
+    icon: ImageVector,
+    color: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp, horizontal = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = color.copy(alpha = 0.14f),
+                modifier = Modifier.size(36.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, contentDescription = label, tint = color, modifier = Modifier.size(20.dp))
+                }
+            }
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

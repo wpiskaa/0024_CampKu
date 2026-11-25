@@ -215,3 +215,14 @@ data class RevenueReport(
     @SerializedName("top_equipments") val topEquipments: List<TopEquipmentReport> = emptyList(),
 )
 
+data class AppNotification(
+    val id: String = "",
+    val type: String = "",
+    val title: String = "",
+    val message: String = "",
+    val date: String = "",
+    @SerializedName("rental_id") val rentalId: Int? = null,
+    @SerializedName("equipment_id") val equipmentId: Int? = null,
+    val urgent: Boolean = false,
+)
+

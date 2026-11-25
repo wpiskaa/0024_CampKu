@@ -1,5 +1,6 @@
 package com.example.campku.data.remote
 
+import com.example.campku.data.model.AppNotification
 import com.example.campku.data.model.Category
 import com.example.campku.data.model.CategoryRequest
 import com.example.campku.data.model.Customer
@@ -169,5 +170,9 @@ interface ApiService {
 
     @GET("api/dashboard/reports")
     suspend fun getRevenueReport(): RevenueReport
+
+    // ----- Notifikasi -----
+    @GET("api/notifications")
+    suspend fun getNotifications(): List<AppNotification>
 }
 

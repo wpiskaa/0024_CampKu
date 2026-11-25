@@ -24,6 +24,7 @@ app.use('/api/customers', require('./routes/customers'));
 app.use('/api/rentals', require('./routes/rentals'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/dashboard', require('./routes/dashboard'));
+app.use('/api/notifications', require('./routes/notifications'));
 
 app.use(notFound);
 app.use(errorHandler);

@@ -405,7 +405,7 @@ fun ProfileScreen(navController: NavHostController, user: User) {
             ProfileMenuSection(title = "Bantuan & Informasi") {
                 ProfileMenuItem(
                     icon = Icons.AutoMirrored.Filled.HelpOutline,
-                    title = "Pusat Bantuan (FAQ)",
+                    title = "Pusat Bantuan",
                     subtitle = "Panduan sewa, diskon & pengembalian alat",
                     iconTint = MaterialTheme.colorScheme.primary,
                     onClick = { activeModal = ProfileInfoModal.HELP },

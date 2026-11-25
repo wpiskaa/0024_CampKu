@@ -31,6 +31,7 @@ import com.example.campku.ui.equipment.EquipmentDetailScreen
 import com.example.campku.ui.equipment.EquipmentFormScreen
 import com.example.campku.ui.equipment.EquipmentListScreen
 import com.example.campku.ui.home.HomeScreen
+import com.example.campku.ui.notification.NotificationScreen
 import com.example.campku.ui.planner.PackagePlannerScreen
 import com.example.campku.ui.profile.AccountSettingsScreen
 import com.example.campku.ui.profile.ProfileScreen
@@ -194,6 +195,19 @@ fun AppNavHost(sessionState: SessionState) {
                     isAdmin = it.isAdmin,
                     onBack = { navController.safePopBack() },
                     onSubmitted = { navController.navigateToTab(Routes.RENTALS, it.isAdmin) },
+                )
+            }
+        }
+        composable(Routes.NOTIFICATIONS) {
+            user?.let {
+                NotificationScreen(
+                    onBack = { navController.safePopBack() },
+                    onOpenRental = { rentalId ->
+                        navController.navigate(Routes.rentalDetail(rentalId)) { launchSingleTop = true }
+                    },
+                    onOpenEquipment = { eqId ->
+                        navController.navigate(Routes.equipmentDetail(eqId)) { launchSingleTop = true }
+                    },
                 )
             }
         }
