@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AddShoppingCart
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Checklist
@@ -344,6 +345,14 @@ fun ProfileScreen(navController: NavHostController, user: User) {
                     subtitle = "Pilih alat camping dengan katalog foto",
                     iconTint = MaterialTheme.colorScheme.secondary,
                     onClick = { navController.navigate(Routes.rentalForm()) { launchSingleTop = true } },
+                )
+                ProfileMenuDivider()
+                ProfileMenuItem(
+                    icon = Icons.Filled.AutoAwesome,
+                    title = "Paket Otomatis Camping",
+                    subtitle = "Rekomendasi set alat berdasarkan jumlah orang",
+                    iconTint = MaterialTheme.colorScheme.primary,
+                    onClick = { navController.navigate(Routes.PACKAGE_PLANNER) { launchSingleTop = true } },
                 )
                 ProfileMenuDivider()
                 ProfileMenuItem(

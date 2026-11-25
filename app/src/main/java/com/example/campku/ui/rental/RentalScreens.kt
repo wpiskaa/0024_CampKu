@@ -1,5 +1,6 @@
 package com.example.campku.ui.rental
 
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QrCode2
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.ShoppingBag
@@ -110,6 +112,8 @@ import com.example.campku.util.formatRupiah
 import com.example.campku.util.rentalDays
 import com.example.campku.util.statusFilterLabel
 import com.example.campku.util.statusLabel
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 
 fun Rental.statusColor(): Color = when {
     isLate -> StatusLate
@@ -159,9 +163,35 @@ fun RentalListScreen(navController: NavHostController, isAdmin: Boolean) {
     val message by vm.message.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var showCodeLookup by remember { mutableStateOf(false) }
+    var scannedBundle by remember { mutableStateOf<Pair<Rental, List<Rental>>?>(null) }
+    var scanError by remember { mutableStateOf<String?>(null) }
+
+    val qrScanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
+        val raw = result.contents?.trim()
+        if (!raw.isNullOrBlank()) {
+            vm.lookupBookingBundle(
+                code = raw,
+                onFound = { primary, itemsList ->
+                    scannedBundle = primary to itemsList
+                },
+                onError = { err -> scanError = err },
+            )
+        }
+    }
+
+    fun startQrCameraScan() {
+        val options = ScanOptions().apply {
+            setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+            setPrompt("Arahkan kamera ke QR Code Booking Pass penyewa")
+            setBeepEnabled(true)
+            setOrientationLocked(true)
+        }
+        qrScanLauncher.launch(options)
+    }
 
     OnResume(vm::refresh)
     MessageEffect(message, snackbar, vm::consumeMessage)
+    MessageEffect(scanError, snackbar) { scanError = null }
 
     MainScreen(
         navController = navController,
@@ -170,8 +200,11 @@ fun RentalListScreen(navController: NavHostController, isAdmin: Boolean) {
         snackbarHostState = snackbar,
         actions = {
             if (isAdmin) {
+                IconButton(onClick = { startQrCameraScan() }) {
+                    Icon(Icons.Filled.QrCodeScanner, contentDescription = "Scan QR Booking Pass")
+                }
                 IconButton(onClick = { showCodeLookup = true }) {
-                    Icon(Icons.Filled.QrCode2, contentDescription = "Verifikasi kode booking")
+                    Icon(Icons.Filled.QrCode2, contentDescription = "Input manual kode booking")
                 }
             }
         },
@@ -267,12 +300,16 @@ fun RentalListScreen(navController: NavHostController, isAdmin: Boolean) {
 
     if (showCodeLookup) {
         BookingCodeLookupDialog(
+            onScanCamera = {
+                showCodeLookup = false
+                startQrCameraScan()
+            },
             onVerify = { code, onErr ->
-                vm.findByBookingCode(
+                vm.lookupBookingBundle(
                     code = code,
-                    onFound = { foundId ->
+                    onFound = { primary, itemsList ->
                         showCodeLookup = false
-                        navController.navigate(Routes.rentalDetail(foundId)) { launchSingleTop = true }
+                        scannedBundle = primary to itemsList
                     },
                     onError = onErr,
                 )
@@ -280,11 +317,24 @@ fun RentalListScreen(navController: NavHostController, isAdmin: Boolean) {
             onDismiss = { showCodeLookup = false },
         )
     }
+
+    scannedBundle?.let { (primary, itemsList) ->
+        ScanConfirmationDialog(
+            primary = primary,
+            items = itemsList,
+            onConfirm = {
+                scannedBundle = null
+                navController.navigate(Routes.rentalDetail(primary.id)) { launchSingleTop = true }
+            },
+            onDismiss = { scannedBundle = null },
+        )
+    }
 }
 
-/** Dialog verifikasi cepat Kode Booking (mis. CK-20261125-0005 atau 5) untuk Admin. */
+/** Dialog verifikasi cepat Kode Booking (scan kamera QR atau ketik manual) untuk Kasir/Admin. */
 @Composable
 private fun BookingCodeLookupDialog(
+    onScanCamera: () -> Unit,
     onVerify: (String, (String) -> Unit) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -294,12 +344,22 @@ private fun BookingCodeLookupDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        icon = { Icon(Icons.Filled.QrCode2, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-        title = { Text("Verifikasi Kode Booking", fontWeight = FontWeight.Bold) },
+        icon = { Icon(Icons.Filled.QrCodeScanner, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+        title = { Text("Scan / Verifikasi Booking", fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(
+                    onClick = onScanCamera,
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    Icon(Icons.Filled.QrCodeScanner, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Scan QR dengan Kamera")
+                }
+                HorizontalDivider()
                 Text(
-                    "Masukkan Kode Booking dari tiket penyewa (contoh: CK-20261125-0005 atau nomor ID).",
+                    "Atau ketik Kode Booking secara manual (contoh: CK-20261125-0005):",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -323,7 +383,106 @@ private fun BookingCodeLookupDialog(
                     }
                 },
             ) {
-                Text(if (loading) "Mencari..." else "Buka Pesanan")
+                Text(if (loading) "Mencari..." else "Cek Pesanan")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Batal") }
+        },
+    )
+}
+
+/** Dialog konfirmasi hasil scan QR Booking Pass sebelum membuka detail pesanan. */
+@Composable
+private fun ScanConfirmationDialog(
+    primary: Rental,
+    items: List<Rental>,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val totalUnits = items.sumOf { it.quantity }
+    val grandTotal = items.sumOf { it.totalPrice + it.lateFee }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                Icons.Filled.CheckCircle,
+                contentDescription = null,
+                tint = StatusReturned,
+                modifier = Modifier.size(36.dp),
+            )
+        },
+        title = {
+            Text(
+                "Konfirmasi Data Pesanan",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 380.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    "Pastikan data penyewa dan daftar barang di bawah ini sudah sesuai sebelum memproses:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        InfoRow("Kode Booking", primary.displayBookingCode, valueColor = MaterialTheme.colorScheme.primary)
+                        InfoRow("Penyewa", primary.customerName)
+                        InfoRow("Tgl Sewa", formatDisplayDate(primary.rentDate))
+                        InfoRow("Total Alat", "${items.size} jenis ($totalUnits unit)")
+                    }
+                }
+                Text(
+                    "Daftar Alat yang Disewa:",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                items.forEachIndexed { idx, r ->
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "${idx + 1}. ${r.equipmentName}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(
+                                    "${r.quantity} unit • ${formatDisplayDate(r.rentDate)} - ${formatDisplayDate(r.dueDate)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            StatusChip(r.statusLabel(), r.statusColor())
+                        }
+                    }
+                }
+                HorizontalDivider(Modifier.padding(vertical = 2.dp))
+                InfoRow("Total Tagihan", formatRupiah(grandTotal), valueColor = MaterialTheme.colorScheme.primary)
+            }
+        },
+        confirmButton = {
+            Button(onClick = onConfirm) {
+                Text("Konfirmasi & Buka Detail")
             }
         },
         dismissButton = {

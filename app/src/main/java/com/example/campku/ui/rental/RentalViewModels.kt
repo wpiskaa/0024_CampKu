@@ -29,10 +29,21 @@ class RentalListViewModel(private val repo: RentalRepository) : ListViewModel<Re
     override suspend fun fetch(search: String, filter: String?) = repo.list(search, filter)
     override suspend fun deleteById(id: Int) = repo.delete(id)
 
-    fun findByBookingCode(code: String, onFound: (Int) -> Unit, onError: (String) -> Unit) {
+    /** Verifikasi Kode Booking / hasil scan QR: mengembalikan pesanan utama + seluruh alat di tanggal yang sama. */
+    fun lookupBookingBundle(
+        code: String,
+        onFound: (Rental, List<Rental>) -> Unit,
+        onError: (String) -> Unit,
+    ) {
         viewModelScope.launch {
             repo.getByCode(code).fold(
-                onSuccess = { onFound(it.id) },
+                onSuccess = { primary ->
+                    val sameDayItems = repo.list(null, null).getOrNull()
+                        ?.filter { it.customerId == primary.customerId && it.rentDate == primary.rentDate }
+                        ?.sortedWith(compareBy<Rental> { it.id != primary.id }.thenByDescending { it.id })
+                        ?: listOf(primary)
+                    onFound(primary, sameDayItems)
+                },
                 onFailure = { onError(it.message ?: "Kode booking tidak ditemukan") },
             )
         }

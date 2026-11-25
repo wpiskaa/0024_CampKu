@@ -23,11 +23,13 @@ async function findOr404(id) {
   return rows[0];
 }
 
+const ORDER_BY = "ORDER BY CASE WHEN LOWER(TRIM(c.name)) = 'lainnya' THEN 1 ELSE 0 END, c.name ASC";
+
 router.get('/', asyncHandler(async (req, res) => {
   const search = String(req.query.search || '').trim();
   const [rows] = search
-    ? await pool.query(`${SELECT} WHERE c.name LIKE ? ORDER BY c.name`, [likePattern(search)])
-    : await pool.query(`${SELECT} ORDER BY c.name`);
+    ? await pool.query(`${SELECT} WHERE c.name LIKE ? ${ORDER_BY}`, [likePattern(search)])
+    : await pool.query(`${SELECT} ${ORDER_BY}`);
   res.json(rows);
 }));
 

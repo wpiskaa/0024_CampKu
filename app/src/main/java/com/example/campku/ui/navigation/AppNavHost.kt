@@ -31,6 +31,7 @@ import com.example.campku.ui.equipment.EquipmentDetailScreen
 import com.example.campku.ui.equipment.EquipmentFormScreen
 import com.example.campku.ui.equipment.EquipmentListScreen
 import com.example.campku.ui.home.HomeScreen
+import com.example.campku.ui.planner.PackagePlannerScreen
 import com.example.campku.ui.profile.AccountSettingsScreen
 import com.example.campku.ui.profile.ProfileScreen
 import com.example.campku.ui.rental.RentalDetailScreen
@@ -186,6 +187,15 @@ fun AppNavHost(sessionState: SessionState) {
         }
         composable(Routes.REPORTS) {
             if (user?.isAdmin == true) ReportScreen(onBack = { navController.safePopBack() })
+        }
+        composable(Routes.PACKAGE_PLANNER) {
+            user?.let {
+                PackagePlannerScreen(
+                    isAdmin = it.isAdmin,
+                    onBack = { navController.safePopBack() },
+                    onSubmitted = { navController.navigateToTab(Routes.RENTALS, it.isAdmin) },
+                )
+            }
         }
     }
 }

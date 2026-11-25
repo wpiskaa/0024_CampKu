@@ -303,6 +303,13 @@ fun EquipmentListScreen(navController: NavHostController, isAdmin: Boolean) {
                 placeholder = "Cari nama alat",
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
             )
+            val orderedCategories = remember(categories) {
+                categories.sortedWith(
+                    compareBy<com.example.campku.data.model.Category> {
+                        it.name.trim().equals("lainnya", ignoreCase = true)
+                    }.thenBy { it.name.lowercase() },
+                )
+            }
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -310,7 +317,7 @@ fun EquipmentListScreen(navController: NavHostController, isAdmin: Boolean) {
                 item {
                     FilterChip(selected = filter == null, onClick = { vm.onFilterChange(null) }, label = { Text("Semua") })
                 }
-                items(categories, key = { it.id }) { c ->
+                items(orderedCategories, key = { it.id }) { c ->
                     FilterChip(
                         selected = filter == c.id,
                         onClick = { vm.onFilterChange(c.id) },

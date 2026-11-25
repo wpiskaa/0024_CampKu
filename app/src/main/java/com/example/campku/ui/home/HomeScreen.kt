@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Category
@@ -87,6 +88,15 @@ fun HomeScreen(navController: NavHostController, user: User) {
                         onClick = { navController.navigate(Routes.rentalForm()) { launchSingleTop = true } },
                         loading = false,
                     )
+                    OutlinedButton(
+                        onClick = { navController.navigate(Routes.PACKAGE_PLANNER) { launchSingleTop = true } },
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(14.dp),
+                    ) {
+                        Icon(Icons.Filled.AutoAwesome, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Paket Otomatis (Hitung Kebutuhan Camping)")
+                    }
                     if (isAdmin) {
                         OutlinedButton(
                             onClick = { navController.navigate(Routes.REPORTS) { launchSingleTop = true } },
