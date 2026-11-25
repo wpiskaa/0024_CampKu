@@ -78,7 +78,6 @@ fun HomeScreen(navController: NavHostController, user: User) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 Greeting(user)
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PromoBanner(isAdmin = isAdmin)
                     SectionTitle(if (isAdmin) "Ringkasan Dashboard" else "Ringkasan Sewa Saya")
                     SummaryGrid(data.summary, isAdmin)
                     Spacer(Modifier.height(4.dp))

@@ -15,7 +15,7 @@ const SELECT = `SELECT r.id, r.customer_id, c.name AS customer_name, c.phone AS 
                        e.photo_path AS equipment_photo,
                        r.processed_by, u.name AS processed_by_name,
                        r.quantity, r.rent_date, r.due_date, r.return_date,
-                       r.total_price, r.late_fee, r.status,
+                       r.total_price, r.discount_percent, r.bonus_days, r.late_fee, r.status,
                        r.pickup_photo_path, r.return_photo_path
                   FROM rentals r
                   JOIN customers c ON c.id = r.customer_id
@@ -73,17 +73,31 @@ async function parseRental(req) {
 
   const baseTotal = calcTotal(b.rent_date, b.due_date, eq[0].daily_price, quantity);
   let finalDueDate = b.due_date;
-  if (req.user.role === 'admin' && Boolean(b.bonus_day)) {
-    if (rentalDays(b.rent_date, b.due_date) < 2) {
-      throw new HttpError(400, 'Promo bonus +1 hari hanya berlaku untuk sewa minimal 2 hari');
+  let bonusDays = 0;
+  let discountPercent = 0;
+  if (req.user.role === 'admin') {
+    if (Boolean(b.bonus_day)) {
+      if (rentalDays(b.rent_date, b.due_date) < 2) {
+        throw new HttpError(400, 'Promo bonus +1 hari hanya berlaku untuk sewa minimal 2 hari');
+      }
+      finalDueDate = addDaysStr(b.due_date, 1);
+      bonusDays = 1;
     }
-    finalDueDate = addDaysStr(b.due_date, 1);
+    if (b.discount_percent !== undefined && b.discount_percent !== null && b.discount_percent !== '') {
+      const dp = toInt(b.discount_percent);
+      if (dp === null || dp < 0 || dp > 100) {
+        throw new HttpError(400, 'Diskon harus berupa angka antara 0 sampai 100%');
+      }
+      discountPercent = dp;
+    }
   }
+  const discountAmount = Math.round((baseTotal * discountPercent) / 100);
+  const finalTotal = Math.max(0, baseTotal - discountAmount);
 
   return {
     customerId, equipmentId, quantity,
     rentDate: b.rent_date, dueDate: finalDueDate,
-    total: baseTotal,
+    total: finalTotal, discountPercent, bonusDays,
   };
 }
 
@@ -125,9 +139,9 @@ router.post('/', asyncHandler(async (req, res) => {
   const d = await parseRental(req);
   const processedBy = req.user.role === 'admin' ? req.user.id : null;
   const [r] = await pool.query(
-    `INSERT INTO rentals (customer_id, equipment_id, processed_by, quantity, rent_date, due_date, total_price, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'dipesan')`,
-    [d.customerId, d.equipmentId, processedBy, d.quantity, d.rentDate, d.dueDate, d.total]
+    `INSERT INTO rentals (customer_id, equipment_id, processed_by, quantity, rent_date, due_date, total_price, discount_percent, bonus_days, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'dipesan')`,
+    [d.customerId, d.equipmentId, processedBy, d.quantity, d.rentDate, d.dueDate, d.total, d.discountPercent, d.bonusDays]
   );
   res.status(201).json(await findOr404(r.insertId, req.user));
 }));
@@ -142,8 +156,8 @@ router.put('/:id', adminOnly, asyncHandler(async (req, res) => {
   const d = await parseRental(req);
   await pool.query(
     `UPDATE rentals SET customer_id = ?, equipment_id = ?, quantity = ?, rent_date = ?, due_date = ?,
-            total_price = ? WHERE id = ?`,
-    [d.customerId, d.equipmentId, d.quantity, d.rentDate, d.dueDate, d.total, id]
+            total_price = ?, discount_percent = ?, bonus_days = ? WHERE id = ?`,
+    [d.customerId, d.equipmentId, d.quantity, d.rentDate, d.dueDate, d.total, d.discountPercent, d.bonusDays, id]
   );
   res.json(await findOr404(id, req.user));
 }));
@@ -206,9 +220,31 @@ router.post('/:id/bonus-day', adminOnly, asyncHandler(async (req, res) => {
     throw new HttpError(400, 'Penyewaan ini sudah mendapatkan bonus +1 hari');
   }
   const newDueDate = addDaysStr(current.due_date, 1);
-  await pool.query('UPDATE rentals SET due_date = ?, processed_by = ? WHERE id = ?', [
-    newDueDate, req.user.id, id,
+  await pool.query('UPDATE rentals SET due_date = ?, bonus_days = ?, processed_by = ? WHERE id = ?', [
+    newDueDate, current.bonus_days + 1, req.user.id, id,
   ]);
+  res.json(await findOr404(id, req.user));
+}));
+
+// Sistem Diskon Admin: menerapkan potongan diskon 0-100% pada total biaya sewa
+router.post('/:id/discount', adminOnly, asyncHandler(async (req, res) => {
+  const id = toInt(req.params.id);
+  const current = await findOr404(id, req.user);
+  if (current.status === 'dikembalikan') {
+    throw new HttpError(400, 'Penyewaan yang sudah dikembalikan tidak dapat diberi diskon');
+  }
+  const dp = toInt(req.body.discount_percent);
+  if (dp === null || dp < 0 || dp > 100) {
+    throw new HttpError(400, 'Diskon harus berupa angka antara 0 sampai 100%');
+  }
+  const payableDays = Math.max(1, current.days - (current.bonus_days || 0));
+  const baseTotal = payableDays * current.daily_price * current.quantity;
+  const discountAmount = Math.round((baseTotal * dp) / 100);
+  const newTotal = Math.max(0, baseTotal - discountAmount);
+  await pool.query(
+    'UPDATE rentals SET discount_percent = ?, total_price = ?, processed_by = ? WHERE id = ?',
+    [dp, newTotal, req.user.id, id]
+  );
   res.json(await findOr404(id, req.user));
 }));
 

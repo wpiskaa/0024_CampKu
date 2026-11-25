@@ -1,7 +1,9 @@
 package com.example.campku.ui.profile
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,8 +21,21 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.AddShoppingCart
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Checklist
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.ManageAccounts
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SupportAgent
+import androidx.compose.material.icons.filled.Terrain
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -29,6 +44,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -38,6 +54,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,6 +65,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
+import com.example.campku.R
 import com.example.campku.appViewModel
 import com.example.campku.data.model.ProfileUpdateRequest
 import com.example.campku.data.model.User
@@ -203,13 +223,16 @@ class ProfileViewModel(private val repo: AuthRepository, initialUser: User) : Vi
     }
 }
 
-/** Profil minimalis: identitas ringkas + ikon gerigi untuk membuka Pengaturan Akun. */
+private enum class ProfileInfoModal { HELP, TERMS, TIPS, CONTACT, ABOUT }
+
+/** Profil minimalis dengan ikon gerigi untuk Pengaturan Akun + menu fitur pendukung lengkap. */
 @Composable
 fun ProfileScreen(navController: NavHostController, user: User) {
     val vm = appViewModel(key = "profile_${user.id}") { ProfileViewModel(it.authRepository, user) }
     val loggingOut by vm.loggingOut.collectAsStateWithLifecycle()
     val state by vm.state.collectAsStateWithLifecycle()
     var confirmLogout by remember { mutableStateOf(false) }
+    var activeModal by remember { mutableStateOf<ProfileInfoModal?>(null) }
 
     OnResume(vm::refresh)
 
@@ -228,9 +251,10 @@ fun ProfileScreen(navController: NavHostController, user: User) {
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 92.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            // 1. Kartu Identitas Ringkas
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
@@ -241,7 +265,7 @@ fun ProfileScreen(navController: NavHostController, user: User) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
-                                .size(56.dp)
+                                .size(54.dp)
                                 .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -280,19 +304,19 @@ fun ProfileScreen(navController: NavHostController, user: User) {
                         "Alamat" to state.address,
                     ).filter { it.second.isNotBlank() }
                     if (rows.isNotEmpty()) {
-                        HorizontalDivider(Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                        HorizontalDivider(Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
                         rows.forEach { (label, value) ->
-                            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                            Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
                                 Text(
                                     label,
-                                    modifier = Modifier.width(80.dp),
+                                    modifier = Modifier.width(78.dp),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 Text(
                                     value,
                                     modifier = Modifier.weight(1f),
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.Medium,
                                 )
                             }
@@ -301,6 +325,106 @@ fun ProfileScreen(navController: NavHostController, user: User) {
                 }
             }
 
+            // 2. Aktivitas & Pesanan
+            ProfileMenuSection(title = "Aktivitas & Pesanan") {
+                ProfileMenuItem(
+                    icon = Icons.Filled.History,
+                    title = if (user.isAdmin) "Kelola Riwayat Penyewaan" else "Riwayat Pesanan Saya",
+                    subtitle = if (user.isAdmin) "Pantau status sewa, diskon & pengembalian" else "Lihat status & riwayat sewa alat Anda",
+                    iconTint = MaterialTheme.colorScheme.primary,
+                    onClick = { navController.navigate(Routes.RENTALS) },
+                )
+                ProfileMenuDivider()
+                ProfileMenuItem(
+                    icon = Icons.Filled.AddShoppingCart,
+                    title = "Buat Pengajuan Sewa",
+                    subtitle = "Pilih alat camping dengan katalog foto",
+                    iconTint = MaterialTheme.colorScheme.secondary,
+                    onClick = { navController.navigate(Routes.rentalForm()) },
+                )
+                ProfileMenuDivider()
+                ProfileMenuItem(
+                    icon = Icons.Filled.Terrain,
+                    title = "Jelajahi Katalog Alat",
+                    subtitle = "Cek stok & harga sewa perlengkapan terbaru",
+                    iconTint = MaterialTheme.colorScheme.primary,
+                    onClick = { navController.navigate(Routes.EQUIPMENTS) },
+                )
+            }
+
+            // 3. Manajemen Khusus Admin
+            if (user.isAdmin) {
+                ProfileMenuSection(title = "Manajemen Admin") {
+                    ProfileMenuItem(
+                        icon = Icons.Filled.ManageAccounts,
+                        title = "Kelola Akun Pengguna",
+                        subtitle = "Atur akun Admin dan Penyewa",
+                        iconTint = MaterialTheme.colorScheme.primary,
+                        onClick = { navController.navigate(Routes.USERS) },
+                    )
+                    ProfileMenuDivider()
+                    ProfileMenuItem(
+                        icon = Icons.Filled.Category,
+                        title = "Kelola Kategori Alat",
+                        subtitle = "Tambah atau ubah kategori perlengkapan",
+                        iconTint = MaterialTheme.colorScheme.secondary,
+                        onClick = { navController.navigate(Routes.CATEGORIES) },
+                    )
+                    ProfileMenuDivider()
+                    ProfileMenuItem(
+                        icon = Icons.Filled.Group,
+                        title = "Data Pelanggan",
+                        subtitle = "Lihat dan perbarui profil penyewa",
+                        iconTint = MaterialTheme.colorScheme.primary,
+                        onClick = { navController.navigate(Routes.CUSTOMERS) },
+                    )
+                }
+            }
+
+            // 4. Bantuan & Informasi Pendukung
+            ProfileMenuSection(title = "Bantuan & Informasi") {
+                ProfileMenuItem(
+                    icon = Icons.AutoMirrored.Filled.HelpOutline,
+                    title = "Pusat Bantuan (FAQ)",
+                    subtitle = "Panduan sewa, diskon & pengembalian alat",
+                    iconTint = MaterialTheme.colorScheme.primary,
+                    onClick = { activeModal = ProfileInfoModal.HELP },
+                )
+                ProfileMenuDivider()
+                ProfileMenuItem(
+                    icon = Icons.Filled.Checklist,
+                    title = "Tips & Checklist Camping",
+                    subtitle = "Daftar perlengkapan wajib sebelum berangkat",
+                    iconTint = MaterialTheme.colorScheme.secondary,
+                    onClick = { activeModal = ProfileInfoModal.TIPS },
+                )
+                ProfileMenuDivider()
+                ProfileMenuItem(
+                    icon = Icons.Filled.Description,
+                    title = "Syarat & Ketentuan Sewa",
+                    subtitle = "Aturan jaminan, foto kondisi & denda",
+                    iconTint = MaterialTheme.colorScheme.primary,
+                    onClick = { activeModal = ProfileInfoModal.TERMS },
+                )
+                ProfileMenuDivider()
+                ProfileMenuItem(
+                    icon = Icons.Filled.SupportAgent,
+                    title = "Hubungi Admin CampKu",
+                    subtitle = "Layanan pelanggan & lokasi basecamp",
+                    iconTint = MaterialTheme.colorScheme.secondary,
+                    onClick = { activeModal = ProfileInfoModal.CONTACT },
+                )
+                ProfileMenuDivider()
+                ProfileMenuItem(
+                    icon = Icons.Filled.Info,
+                    title = "Tentang Aplikasi",
+                    subtitle = "CampKu v1.0 • Sistem Rental Alat Camping",
+                    iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    onClick = { activeModal = ProfileInfoModal.ABOUT },
+                )
+            }
+
+            // 5. Tombol Keluar
             OutlinedButton(
                 onClick = { confirmLogout = true },
                 enabled = !loggingOut,
@@ -329,6 +453,167 @@ fun ProfileScreen(navController: NavHostController, user: User) {
             onDismiss = { confirmLogout = false },
         )
     }
+
+    activeModal?.let { modal ->
+        ProfileInfoDialog(modal = modal, onDismiss = { activeModal = null })
+    }
+}
+
+@Composable
+private fun ProfileMenuSection(
+    title: String,
+    content: @Composable () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            title,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        ) {
+            Column(Modifier.fillMaxWidth()) { content() }
+        }
+    }
+}
+
+@Composable
+private fun ProfileMenuItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    iconTint: Color,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = iconTint.copy(alpha = 0.12f),
+            modifier = Modifier.size(38.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(20.dp))
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun ProfileMenuDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(horizontal = 16.dp),
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f),
+    )
+}
+
+@Composable
+private fun ProfileInfoDialog(modal: ProfileInfoModal, onDismiss: () -> Unit) {
+    val (title, body) = when (modal) {
+        ProfileInfoModal.HELP -> "Pusat Bantuan (FAQ)" to """
+            1. Bagaimana cara menyewa alat?
+            Buka menu Alat atau tombol Buat Sewa, pilih satu atau beberapa barang beserta jumlahnya, lalu tentukan tanggal sewa dan kembali.
+
+            2. Bagaimana proses pengambilan alat?
+            Tunjukkan pesanan Anda ke Admin basecamp. Admin akan memfoto kondisi alat sebelum disewa lalu mengubah status menjadi Disewa.
+
+            3. Apakah tersedia diskon atau bonus hari?
+            Admin dapat memberikan potongan diskon (%) maupun bonus hari sewa secara langsung pada pesanan Anda.
+
+            4. Bagaimana cara mengubah data akun?
+            Ketuk ikon gerigi (⚙) di pojok kanan atas halaman Profil untuk mengubah nama, email, HP, KTP/SIM, alamat, atau password.
+        """.trimIndent()
+
+        ProfileInfoModal.TIPS -> "Tips & Checklist Camping" to """
+            Perlengkapan wajib yang disarankan sebelum berangkat:
+            • Tenda double layer + pasak & footprint
+            • Carrier 50L–60L dengan rain cover
+            • Sleeping bag polar & matras gulung
+            • Kompor portable + gas hi-cook cadangan
+            • Headlamp LED + baterai cadangan
+            • Jaket gunung, jas hujan, & P3K pribadi
+
+            Tips: Cek kelengkapan tenda bersama Admin saat pengambilan alat agar perjalanan aman dan nyaman!
+        """.trimIndent()
+
+        ProfileInfoModal.TERMS -> "Syarat & Ketentuan Sewa" to """
+            • Penyewa wajib melampirkan identitas asli (KTP / SIM / KTM) yang masih berlaku sebagai jaminan.
+            • Kondisi alat wajib didokumentasikan dengan foto sebelum disewa dan saat dikembalikan.
+            • Keterlambatan pengembalian dikenakan denda otomatis sebesar 10% dari harga sewa harian per hari terlambat.
+            • Kerusakan atau kehilangan komponen alat menjadi tanggung jawab penyewa sesuai kesepakatan basecamp.
+        """.trimIndent()
+
+        ProfileInfoModal.CONTACT -> "Hubungi Admin CampKu" to """
+            Butuh bantuan cepat atau konsultasi alat?
+
+            • WhatsApp Admin : +62 812-3456-7890
+            • Email Dukungan : admin@campku.com
+            • Jam Operasional: Setiap hari, 08.00 – 21.00 WIB
+            • Basecamp       : CampKu Outdoor Gear Store
+        """.trimIndent()
+
+        ProfileInfoModal.ABOUT -> "Tentang CampKu" to """
+            CampKu v1.0
+            Sistem Rental Alat Camping berbasis Android (Jetpack Compose, MVVM, REST API & MySQL).
+
+            Dirancang untuk memudahkan penyewaan perlengkapan pendakian, manajemen stok otomatis, dokumentasi kondisi alat, serta perhitungan biaya & diskon secara transparan.
+        """.trimIndent()
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = if (modal == ProfileInfoModal.ABOUT) {
+            {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_campku_logo),
+                    contentDescription = "Logo CampKu",
+                    modifier = Modifier.size(52.dp),
+                )
+            }
+        } else null,
+        title = { Text(title, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(body, style = MaterialTheme.typography.bodyMedium)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Tutup") }
+        },
+    )
 }
 
 /** Pengaturan Akun (dibuka dari ikon gerigi di Profil): ubah data akun dan alamat server. */

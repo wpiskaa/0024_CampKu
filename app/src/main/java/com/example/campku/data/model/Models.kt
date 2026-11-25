@@ -137,6 +137,8 @@ data class Rental(
     @SerializedName("return_photo_path") val returnPhotoPath: String?,
     val days: Int = 1,
     @SerializedName("bonus_days") val bonusDays: Int = 0,
+    @SerializedName("discount_percent") val discountPercent: Int = 0,
+    @SerializedName("discount_amount") val discountAmount: Int = 0,
     @SerializedName("is_late") val isLate: Boolean = false,
     @SerializedName("late_days") val lateDays: Int = 0,
 )
@@ -148,9 +150,12 @@ data class RentalRequest(
     @SerializedName("rent_date") val rentDate: String,
     @SerializedName("due_date") val dueDate: String,
     @SerializedName("bonus_day") val bonusDay: Boolean = false,
+    @SerializedName("discount_percent") val discountPercent: Int = 0,
 )
 
 data class StatusRequest(val status: String)
+
+data class DiscountRequest(@SerializedName("discount_percent") val discountPercent: Int)
 
 // ---------- Pengguna ----------
 

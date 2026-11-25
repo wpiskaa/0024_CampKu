@@ -22,10 +22,18 @@ async function main() {
   let schema = fs.readFileSync(path.join(__dirname, '..', 'sql', 'schema.sql'), 'utf8');
   schema = schema.replace(/campku/g, dbName);
   await conn.query(schema);
-  // Pastikan kolom pickup_photo_path ada jika tabel lama sudah telanjur dibuat
+  // Pastikan kolom pickup_photo_path, discount_percent, dan bonus_days ada jika tabel lama sudah telanjur dibuat
   const [cols] = await conn.query("SHOW COLUMNS FROM rentals LIKE 'pickup_photo_path'");
   if (!cols.length) {
     await conn.query('ALTER TABLE rentals ADD COLUMN pickup_photo_path VARCHAR(255) NULL AFTER status');
+  }
+  const [discCols] = await conn.query("SHOW COLUMNS FROM rentals LIKE 'discount_percent'");
+  if (!discCols.length) {
+    await conn.query('ALTER TABLE rentals ADD COLUMN discount_percent INT NOT NULL DEFAULT 0 AFTER total_price');
+  }
+  const [bonusCols] = await conn.query("SHOW COLUMNS FROM rentals LIKE 'bonus_days'");
+  if (!bonusCols.length) {
+    await conn.query('ALTER TABLE rentals ADD COLUMN bonus_days INT NOT NULL DEFAULT 0 AFTER discount_percent');
   }
   console.log(`Skema database "${dbName}" siap.`);
 

@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.ShoppingBag
@@ -182,27 +183,6 @@ fun RentalListScreen(navController: NavHostController, isAdmin: Boolean) {
                         onClick = { vm.onFilterChange(status) },
                         label = { Text(statusFilterLabel(status.orEmpty())) },
                     )
-                }
-            }
-            if (!isAdmin) {
-                Card(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-                ) {
-                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Filled.CardGiftcard,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.secondary,
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text(
-                            "Promo Sewa 2 Hari Jadi 3 Hari: Sewa minimal 2 hari dapat bonus +1 hari gratis yang diberikan oleh Administrator saat verifikasi.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
-                    }
                 }
             }
             StateContent(items, onRetry = vm::retry) { list ->
@@ -391,6 +371,7 @@ fun RentalDetailScreen(
     val storage = (LocalContext.current.applicationContext as CampKuApp).container.photoStorage
     var deleteTarget by remember { mutableStateOf<Rental?>(null) }
     var statusTarget by remember { mutableStateOf<Pair<Rental, String>?>(null) }
+    var discountTarget by remember { mutableStateOf<Rental?>(null) }
 
     OnResume { vm.load() }
     MessageEffect(message, snackbar, vm::consumeMessage)
@@ -455,34 +436,9 @@ fun RentalDetailScreen(
                     }
                 }
 
-                // 2. Banner Info Promo 2 Hari Jadi 3 Hari
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-                ) {
-                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Filled.CardGiftcard,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.secondary,
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text(
-                            if (isAdmin) {
-                                "Promo Admin (Sewa 2 Hari Jadi 3 Hari): Tekan tombol 'Berikan Bonus +1 Hari' pada barang yang disewa minimal 2 hari untuk menambah 1 hari gratis."
-                            } else {
-                                "Promo Sewa 2 Hari Jadi 3 Hari: Penyewaan minimal 2 hari berhak mendapat bonus +1 hari gratis yang diaktifkan oleh Administrator."
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
-                    }
-                }
-
                 SectionTitle("Daftar Barang yang Disewa (${itemsToShow.size})")
 
-                // 3. Rincian Setiap Barang yang Disewa oleh Penyewa Tersebut
+                // 2. Rincian Setiap Barang yang Disewa oleh Penyewa Tersebut
                 itemsToShow.forEachIndexed { index, r ->
                     RentalEquipmentDetailCard(
                         index = index + 1,
@@ -494,6 +450,7 @@ fun RentalDetailScreen(
                         onEdit = { onEdit(r.id) },
                         onDelete = { deleteTarget = r },
                         onApplyBonusDay = { vm.applyBonusDay(r.id) },
+                        onOpenDiscount = { discountTarget = r },
                         onUploadPickupPhoto = { uri -> vm.uploadPickupPhoto(r.id, uri) },
                         onUploadReturnPhoto = { uri -> vm.uploadReturnPhoto(r.id, uri) },
                         onConfirmStatus = { nextStatus -> statusTarget = r to nextStatus },
@@ -501,6 +458,17 @@ fun RentalDetailScreen(
                 }
             }
         }
+    }
+
+    discountTarget?.let { target ->
+        DiscountDialog(
+            rental = target,
+            onApply = { pct ->
+                vm.applyDiscount(target.id, pct)
+                discountTarget = null
+            },
+            onDismiss = { discountTarget = null },
+        )
     }
 
     statusTarget?.let { (rental, next) ->
@@ -539,6 +507,7 @@ private fun RentalEquipmentDetailCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onApplyBonusDay: () -> Unit,
+    onOpenDiscount: () -> Unit,
     onUploadPickupPhoto: (android.net.Uri) -> Unit,
     onUploadReturnPhoto: (android.net.Uri) -> Unit,
     onConfirmStatus: (String) -> Unit,
@@ -625,6 +594,13 @@ private fun RentalEquipmentDetailCard(
             )
             r.processedByName?.let { InfoRow("Diproses oleh", it) }
             InfoRow("Biaya Sewa", formatRupiah(r.totalPrice))
+            if (r.discountPercent > 0) {
+                InfoRow(
+                    "Diskon (${r.discountPercent}%)",
+                    "-${formatRupiah(r.discountAmount)}",
+                    valueColor = MaterialTheme.colorScheme.secondary,
+                )
+            }
             if (r.lateFee > 0 || r.isLate) {
                 InfoRow("Denda", formatRupiah(r.lateFee), valueColor = StatusLate)
             }
@@ -634,7 +610,36 @@ private fun RentalEquipmentDetailCard(
                 valueColor = MaterialTheme.colorScheme.primary,
             )
 
-            // Status / Tombol Promo Bonus +1 Hari (Sewa 2 Hari Jadi 3 Hari)
+            // Sistem Diskon & Bonus Hari (Khusus Admin)
+            if (isAdmin && r.status != RentalStatus.DIKEMBALIKAN) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = onOpenDiscount,
+                        enabled = !busy,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Icon(Icons.Filled.LocalOffer, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (r.discountPercent > 0) "Diskon ${r.discountPercent}%" else "Tambah Diskon", maxLines = 1)
+                    }
+                    if (r.bonusDays == 0 && r.days >= 2) {
+                        OutlinedButton(
+                            onClick = onApplyBonusDay,
+                            enabled = !busy,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            Icon(Icons.Filled.CardGiftcard, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Bonus +1 Hr", maxLines = 1)
+                        }
+                    }
+                }
+            }
             if (r.bonusDays > 0) {
                 Surface(
                     shape = RoundedCornerShape(10.dp),
@@ -645,22 +650,12 @@ private fun RentalEquipmentDetailCard(
                         Icon(Icons.Filled.CheckCircle, null, tint = MaterialTheme.colorScheme.secondary)
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            "🎁 Promo Aktif: Sudah mendapat Bonus +${r.bonusDays} Hari Gratis dari Administrator!",
+                            "Termasuk Bonus +${r.bonusDays} Hari Gratis dari Administrator",
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
                     }
-                }
-            } else if (isAdmin && r.status != RentalStatus.DIKEMBALIKAN && r.days >= 2) {
-                OutlinedButton(
-                    onClick = onApplyBonusDay,
-                    enabled = !busy,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(Icons.Filled.CardGiftcard, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("🎁 Berikan Bonus +1 Hari Gratis (Promo 2 Jadi 3 Hari)")
                 }
             }
 
@@ -799,77 +794,15 @@ fun RentalFormScreen(
                         val sub = estimateTotal(state.rentDate, state.dueDate, eq.dailyPrice, qty) ?: return@mapNotNull null
                         Triple(eq, qty, sub)
                     }
-                    val grandTotal = validLines.takeIf { it.isNotEmpty() }?.sumOf { it.third }
+                    val discountPct = if (isAdmin) (state.discountPercent.trim().toIntOrNull()?.coerceIn(0, 100) ?: 0) else 0
+                    val rawTotal = validLines.takeIf { it.isNotEmpty() }?.sumOf { it.third }
+                    val discountAmount = rawTotal?.let { (it * discountPct) / 100 } ?: 0
+                    val grandTotal = rawTotal?.let { (it - discountAmount).coerceAtLeast(0) }
 
                     Column(
                         modifier = Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(20.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        // Info Promo Sewa 2 Hari Jadi 3 Hari
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-                        ) {
-                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        Icons.Filled.CardGiftcard,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.secondary,
-                                    )
-                                    Spacer(Modifier.width(10.dp))
-                                    Column(Modifier.weight(1f)) {
-                                        Text(
-                                            "Promo Sewa 2 Hari Dapat Plus Jadi 3 Hari!",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        )
-                                        Text(
-                                            if (isAdmin) {
-                                                "Sebagai Administrator, Anda dapat mengaktifkan bonus +1 hari gratis untuk penyewaan minimal 2 hari."
-                                            } else {
-                                                "Sewa minimal 2 hari dapat bonus +1 hari gratis (total jadi 3 hari)! Bonus diberikan oleh Administrator saat verifikasi pesanan Anda."
-                                            },
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        )
-                                    }
-                                }
-                                if (isAdmin) {
-                                    HorizontalDivider()
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Column(Modifier.weight(1f)) {
-                                            Text(
-                                                "Berikan Bonus +1 Hari Gratis (Khusus Admin)",
-                                                style = MaterialTheme.typography.labelLarge,
-                                                fontWeight = FontWeight.SemiBold,
-                                            )
-                                            Text(
-                                                if (effectiveBonus) {
-                                                    "Aktif: Tanggal kembali menjadi ${formatDisplayDate(finalDueDatePreview)} (bayar $baseDays hari, dapat ${(baseDays ?: 2) + 1} hari)"
-                                                } else if (eligibleForBonus) {
-                                                    "Nyalakan untuk memberi 1 hari gratis (bayar $baseDays hari, dapat ${(baseDays ?: 2) + 1} hari)"
-                                                } else {
-                                                    "Pilih durasi minimal 2 hari untuk mengaktifkan bonus +1 hari"
-                                                },
-                                                style = MaterialTheme.typography.bodySmall,
-                                            )
-                                        }
-                                        Switch(
-                                            checked = effectiveBonus,
-                                            onCheckedChange = { checked -> vm.update { copy(bonusDay = checked) } },
-                                            enabled = eligibleForBonus,
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
                         if (isAdmin) {
                             DropdownField(
                                 label = "Pelanggan / Orang Penyewa",
@@ -1061,6 +994,75 @@ fun RentalFormScreen(
                             { v -> vm.update { copy(dueDate = v) } }, error = state.errors["dueDate"],
                         )
 
+                        if (isAdmin) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            ) {
+                                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Filled.LocalOffer, null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            "Diskon & Bonus (Khusus Admin)",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                    }
+                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        items(listOf(0, 5, 10, 15, 20, 25)) { pct ->
+                                            FilterChip(
+                                                selected = discountPct == pct,
+                                                onClick = { vm.update { copy(discountPercent = pct.toString()) } },
+                                                label = { Text(if (pct == 0) "Tanpa Diskon" else "$pct%") },
+                                            )
+                                        }
+                                    }
+                                    AppTextField(
+                                        value = state.discountPercent,
+                                        onValueChange = { v ->
+                                            val digits = v.filter(Char::isDigit).take(3)
+                                            val clamped = digits.toIntOrNull()?.coerceIn(0, 100)?.toString() ?: ""
+                                            vm.update { copy(discountPercent = clamped) }
+                                        },
+                                        label = "Diskon Custom (0 - 100%)",
+                                        keyboardType = KeyboardType.Number,
+                                    )
+                                    HorizontalDivider()
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(
+                                                "Bonus +1 Hari Gratis (Sewa ≥ 2 Hari)",
+                                                style = MaterialTheme.typography.labelLarge,
+                                                fontWeight = FontWeight.SemiBold,
+                                            )
+                                            Text(
+                                                if (effectiveBonus) {
+                                                    "Aktif: kembali ${formatDisplayDate(finalDueDatePreview)}"
+                                                } else if (eligibleForBonus) {
+                                                    "Opsional: tambah +1 hari tanpa biaya tambahan"
+                                                } else {
+                                                    "Pilih durasi minimal 2 hari"
+                                                },
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                        Switch(
+                                            checked = effectiveBonus,
+                                            onCheckedChange = { checked -> vm.update { copy(bonusDay = checked) } },
+                                            enabled = eligibleForBonus,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         Card(
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                             shape = RoundedCornerShape(20.dp),
@@ -1081,18 +1083,19 @@ fun RentalFormScreen(
                                             style = MaterialTheme.typography.bodySmall,
                                         )
                                     }
-                                    if (effectiveBonus) {
+                                    if (discountPct > 0 && discountAmount > 0) {
                                         Text(
-                                            "🎁 Bonus Admin Aktif: +1 Hari Gratis (Total durasi ${baseDays + 1} hari, kembali ${formatDisplayDate(finalDueDatePreview)})",
+                                            "• Diskon ($discountPct%): -${formatRupiah(discountAmount)}",
                                             style = MaterialTheme.typography.bodySmall,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.secondary,
                                         )
-                                    } else if (!isAdmin && baseDays >= 2) {
+                                    }
+                                    if (effectiveBonus) {
                                         Text(
-                                            "🎁 Memenuhi syarat Promo Sewa ≥ 2 Hari: berhak mendapat bonus +1 hari gratis dari Administrator!",
+                                            "• Bonus Admin: +1 Hari Gratis (Total durasi ${baseDays + 1} hari, kembali ${formatDisplayDate(finalDueDatePreview)})",
                                             style = MaterialTheme.typography.bodySmall,
-                                            fontWeight = FontWeight.SemiBold,
+                                            fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.secondary,
                                         )
                                     }
@@ -1256,6 +1259,70 @@ private fun EquipmentPhotoPickerDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) { Text("Tutup") }
+        },
+    )
+}
+
+/** Dialog atur potongan diskon (%) khusus Admin pada Detail Sewa. */
+@Composable
+private fun DiscountDialog(
+    rental: Rental,
+    onApply: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var input by remember { mutableStateOf(rental.discountPercent.toString()) }
+    val pct = input.trim().toIntOrNull()?.coerceIn(0, 100) ?: 0
+    val payableDays = (rental.days - rental.bonusDays).coerceAtLeast(1)
+    val baseTotal = payableDays * rental.dailyPrice * rental.quantity
+    val discountAmount = (baseTotal * pct) / 100
+    val finalTotal = (baseTotal - discountAmount).coerceAtLeast(0)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Atur Diskon Sewa", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    rental.equipmentName,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(listOf(0, 5, 10, 15, 20, 25, 30, 50)) { preset ->
+                        FilterChip(
+                            selected = pct == preset,
+                            onClick = { input = preset.toString() },
+                            label = { Text("$preset%") },
+                        )
+                    }
+                }
+                AppTextField(
+                    value = input,
+                    onValueChange = { v ->
+                        val digits = v.filter(Char::isDigit).take(3)
+                        input = digits.toIntOrNull()?.coerceIn(0, 100)?.toString() ?: ""
+                    },
+                    label = "Persentase Diskon (0 - 100%)",
+                    keyboardType = KeyboardType.Number,
+                )
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        InfoRow("Harga normal", formatRupiah(baseTotal))
+                        InfoRow("Potongan ($pct%)", "-${formatRupiah(discountAmount)}", valueColor = MaterialTheme.colorScheme.secondary)
+                        InfoRow("Total baru", formatRupiah(finalTotal), valueColor = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onApply(pct) }) { Text("Terapkan Diskon") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Batal") }
         },
     )
 }

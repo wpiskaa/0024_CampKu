@@ -5,6 +5,7 @@ import com.example.campku.data.model.CategoryRequest
 import com.example.campku.data.model.Customer
 import com.example.campku.data.model.CustomerRequest
 import com.example.campku.data.model.Dashboard
+import com.example.campku.data.model.DiscountRequest
 import com.example.campku.data.model.Equipment
 import com.example.campku.data.model.EquipmentRequest
 import com.example.campku.data.model.LoginRequest
@@ -127,6 +128,9 @@ interface ApiService {
 
     @POST("api/rentals/{id}/bonus-day")
     suspend fun applyBonusDay(@Path("id") id: Int): Rental
+
+    @POST("api/rentals/{id}/discount")
+    suspend fun applyDiscount(@Path("id") id: Int, @Body body: DiscountRequest): Rental
 
     @Multipart
     @POST("api/rentals/{id}/pickup-photo")

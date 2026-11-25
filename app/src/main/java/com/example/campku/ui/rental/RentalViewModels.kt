@@ -124,6 +124,26 @@ class RentalDetailViewModel(private val repo: RentalRepository, private val id: 
         }
     }
 
+    /** Sistem Diskon Admin: menerapkan potongan diskon 0-100% pada total biaya sewa. */
+    fun applyDiscount(targetId: Int, discountPercent: Int) {
+        if (_busy.value) return
+        viewModelScope.launch {
+            _busy.value = true
+            repo.applyDiscount(targetId, discountPercent).fold(
+                onSuccess = { rental ->
+                    replaceInList(rental)
+                    _message.value = if (discountPercent > 0) {
+                        "Diskon $discountPercent% berhasil diterapkan untuk ${rental.equipmentName}"
+                    } else {
+                        "Diskon untuk ${rental.equipmentName} dihapus"
+                    }
+                },
+                onFailure = { _message.value = it.message },
+            )
+            _busy.value = false
+        }
+    }
+
     /** Foto kondisi sebelum disewa: simpan ke filesDir lalu unggah salinannya ke server. */
     fun uploadPickupPhoto(targetId: Int, uri: Uri) {
         if (_busy.value) return
@@ -191,6 +211,7 @@ data class RentalFormState(
     val rentDate: String = todayIso(),
     val dueDate: String = addDaysIso(todayIso(), 2),
     val bonusDay: Boolean = false,
+    val discountPercent: String = "0",
     val errors: Map<String, String> = emptyMap(),
     val saving: Boolean = false,
     val error: String? = null,
@@ -253,6 +274,8 @@ class RentalFormViewModel(
                             items = listOf(RentalItemInput(equipmentId = r.equipmentId, quantity = r.quantity.toString())),
                             rentDate = r.rentDate,
                             dueDate = r.dueDate,
+                            bonusDay = r.bonusDays > 0,
+                            discountPercent = r.discountPercent.toString(),
                         )
                     }
                 },
@@ -323,16 +346,17 @@ class RentalFormViewModel(
         viewModelScope.launch {
             val customerId = if (isAdmin) s.customerId else null
             val applyBonus = isAdmin && s.bonusDay
+            val discountPct = if (isAdmin) (s.discountPercent.trim().toIntOrNull()?.coerceIn(0, 100) ?: 0) else 0
             if (isEdit) {
                 val (eqId, qty) = mergedItems.first()
-                val req = RentalRequest(customerId, eqId, qty, s.rentDate, s.dueDate, bonusDay = applyBonus)
+                val req = RentalRequest(customerId, eqId, qty, s.rentDate, s.dueDate, bonusDay = applyBonus, discountPercent = discountPct)
                 repo.update(id, req).fold(
                     onSuccess = { _state.update { it.copy(saving = false, saved = true) } },
                     onFailure = { e -> _state.update { it.copy(saving = false, error = e.message) } },
                 )
             } else {
                 for ((eqId, qty) in mergedItems) {
-                    val req = RentalRequest(customerId, eqId, qty, s.rentDate, s.dueDate, bonusDay = applyBonus)
+                    val req = RentalRequest(customerId, eqId, qty, s.rentDate, s.dueDate, bonusDay = applyBonus, discountPercent = discountPct)
                     val res = repo.create(req)
                     if (res.isFailure) {
                         _state.update { it.copy(saving = false, error = res.exceptionOrNull()?.message) }

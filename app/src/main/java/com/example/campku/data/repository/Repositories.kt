@@ -7,6 +7,7 @@ import com.example.campku.data.model.CategoryRequest
 import com.example.campku.data.model.Customer
 import com.example.campku.data.model.CustomerRequest
 import com.example.campku.data.model.Dashboard
+import com.example.campku.data.model.DiscountRequest
 import com.example.campku.data.model.Equipment
 import com.example.campku.data.model.EquipmentRequest
 import com.example.campku.data.model.LoginRequest
@@ -148,6 +149,7 @@ class RentalRepository(private val api: ApiService, private val photos: PhotoSto
     suspend fun update(id: Int, r: RentalRequest) = apiCall { api.updateRental(id, r) }
     suspend fun changeStatus(id: Int, status: String) = apiCall { api.updateRentalStatus(id, StatusRequest(status)) }
     suspend fun applyBonusDay(id: Int) = apiCall { api.applyBonusDay(id) }
+    suspend fun applyDiscount(id: Int, discountPercent: Int) = apiCall { api.applyDiscount(id, DiscountRequest(discountPercent)) }
 
     suspend fun delete(id: Int) = apiCall {
         api.deleteRental(id)

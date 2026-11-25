@@ -80,9 +80,11 @@ function decorateRental(row) {
   const today = todayStr();
   const out = { ...row };
   out.days = rentalDays(row.rent_date, row.due_date);
-  const unitPerDay = (row.daily_price || 0) * (row.quantity || 1);
-  const standardTotal = out.days * unitPerDay;
-  out.bonus_days = unitPerDay > 0 ? Math.max(0, Math.round((standardTotal - row.total_price) / unitPerDay)) : 0;
+  out.bonus_days = Number(row.bonus_days || 0);
+  out.discount_percent = Number(row.discount_percent || 0);
+  const payableDays = Math.max(1, out.days - out.bonus_days);
+  const baseTotal = payableDays * (row.daily_price || 0) * (row.quantity || 1);
+  out.discount_amount = Math.max(0, Math.round((baseTotal * out.discount_percent) / 100));
   out.is_late = false;
   out.late_days = 0;
 
