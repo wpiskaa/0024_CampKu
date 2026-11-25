@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocalOffer
@@ -121,13 +122,15 @@ private val statusFilters = listOf(
     RentalStatus.DIKEMBALIKAN,
 )
 
-/** Kelompok penyewaan per orang penyewa (untuk daftar Admin). */
+/** Kelompok penyewaan per orang penyewa & tanggal sewa (agar beda hari tidak tercampur). */
 private data class CustomerRentalGroup(
     val customerId: Int,
     val customerName: String,
     val customerPhone: String?,
+    val rentDate: String,
     val rentals: List<Rental>,
 ) {
+    val groupKey: String get() = "${customerId}_$rentDate"
     val primaryId: Int get() = rentals.first().id
     val totalUnits: Int get() = rentals.sumOf { it.quantity }
     val totalAmount: Int get() = rentals.sumOf { it.totalPrice + it.lateFee }
@@ -140,8 +143,8 @@ private data class CustomerRentalGroup(
 
 /**
  * Daftar Sewa (cari + filter status).
- * - Untuk Admin: dikelompokkan berdasarkan Orang Penyewa (pelanggan). Saat diklik, baru mendetail barang apa saja yang disewa.
- * - Untuk Penyewa: menampilkan daftar sewa miliknya beserta info promo 2 hari jadi 3 hari.
+ * - Untuk Admin: dikelompokkan berdasarkan Orang Penyewa + Tanggal Sewa. Saat diklik, baru mendetail barang di tanggal tersebut.
+ * - Untuk Penyewa (Sewa Saya): dipisahkan per Tanggal/Bulan/Tahun sewa agar transaksi di hari berbeda tidak digabung.
  */
 @Composable
 fun RentalListScreen(navController: NavHostController, isAdmin: Boolean) {
@@ -161,7 +164,7 @@ fun RentalListScreen(navController: NavHostController, isAdmin: Boolean) {
         title = if (isAdmin) "Daftar Penyewa" else "Sewa Saya",
         snackbarHostState = snackbar,
         floatingActionButton = {
-            FloatingActionButton(onClick = { navController.navigate(Routes.rentalForm()) }) {
+            FloatingActionButton(onClick = { navController.navigate(Routes.rentalForm()) { launchSingleTop = true } }) {
                 Icon(Icons.Filled.Add, "Buat sewa")
             }
         },
@@ -193,34 +196,55 @@ fun RentalListScreen(navController: NavHostController, isAdmin: Boolean) {
                     )
                 } else if (isAdmin) {
                     val groups = remember(list) {
-                        list.groupBy { it.customerId }.map { (custId, rentals) ->
-                            val first = rentals.first()
-                            CustomerRentalGroup(
-                                customerId = custId,
-                                customerName = first.customerName,
-                                customerPhone = first.customerPhone,
-                                rentals = rentals,
-                            )
-                        }
+                        list.groupBy { it.customerId to it.rentDate }
+                            .map { (key, rentals) ->
+                                val first = rentals.first()
+                                CustomerRentalGroup(
+                                    customerId = key.first,
+                                    customerName = first.customerName,
+                                    customerPhone = first.customerPhone,
+                                    rentDate = key.second,
+                                    rentals = rentals,
+                                )
+                            }
+                            .sortedByDescending { it.rentDate }
                     }
                     LazyColumn(
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 88.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        items(groups, key = { it.customerId }) { group ->
+                        items(groups, key = { it.groupKey }) { group ->
                             CustomerRentalGroupCard(group) {
-                                navController.navigate(Routes.rentalDetail(group.primaryId))
+                                navController.navigate(Routes.rentalDetail(group.primaryId)) { launchSingleTop = true }
                             }
                         }
                     }
                 } else {
+                    // Penyewa (Sewa Saya): pisahkan per tanggal/bulan/tahun sewa (rentDate)
+                    val dateGroups = remember(list) {
+                        list.groupBy { it.rentDate }
+                            .entries
+                            .sortedByDescending { it.key }
+                            .map { it.key to it.value }
+                    }
                     LazyColumn(
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 88.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        items(list, key = { it.id }) { r ->
-                            RentalCard(r, showCustomer = false) {
-                                navController.navigate(Routes.rentalDetail(r.id))
+                        dateGroups.forEach { (rentDate, rentalsOnDate) ->
+                            item(key = "header_$rentDate") {
+                                DateRentalSectionHeader(
+                                    rentDate = rentDate,
+                                    rentals = rentalsOnDate,
+                                )
+                            }
+                            items(rentalsOnDate, key = { it.id }) { r ->
+                                RentalCard(r, showCustomer = false) {
+                                    navController.navigate(Routes.rentalDetail(r.id)) { launchSingleTop = true }
+                                }
+                            }
+                            item(key = "spacer_$rentDate") {
+                                Spacer(Modifier.height(4.dp))
                             }
                         }
                     }
@@ -230,7 +254,51 @@ fun RentalListScreen(navController: NavHostController, isAdmin: Boolean) {
     }
 }
 
-/** Kartu daftar penyewa untuk Admin: menampilkan nama orang penyewa; saat diklik baru mendetail barangnya. */
+/** Header pemisah tanggal/bulan/tahun pada daftar Sewa Saya agar sewa di hari berbeda tidak digabung. */
+@Composable
+private fun DateRentalSectionHeader(rentDate: String, rentals: List<Rental>) {
+    val totalUnits = rentals.sumOf { it.quantity }
+    val totalCost = rentals.sumOf { it.totalPrice + it.lateFee }
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Filled.DateRange,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "Sewa Tanggal ${formatDisplayDate(rentDate)}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+                Text(
+                    "${rentals.size} barang ($totalUnits unit)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                )
+            }
+            Text(
+                formatRupiah(totalCost),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+}
+
+/** Kartu daftar penyewa untuk Admin: menampilkan nama orang penyewa + tanggal sewa; saat diklik baru mendetail barangnya. */
 @Composable
 private fun CustomerRentalGroupCard(group: CustomerRentalGroup, onClick: () -> Unit) {
     val rep = group.representative
@@ -262,13 +330,12 @@ private fun CustomerRentalGroupCard(group: CustomerRentalGroup, onClick: () -> U
                 )
                 StatusChip(rep.statusLabel(), rep.statusColor())
             }
-            group.customerPhone?.takeIf { it.isNotBlank() && it != "-" }?.let { phone ->
-                Text(
-                    "HP: $phone",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Text(
+                "Tgl Sewa: ${formatDisplayDate(group.rentDate)}" +
+                    (group.customerPhone?.takeIf { it.isNotBlank() && it != "-" }?.let { "  •  $it" } ?: ""),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Text(
                 "${group.rentals.size} jenis barang (${group.totalUnits} unit) • Ketuk untuk detail barang",
                 style = MaterialTheme.typography.bodySmall,
@@ -383,7 +450,7 @@ fun RentalDetailScreen(
         snackbarHostState = snackbar,
     ) { padding ->
         StateContent(state, onRetry = { vm.load(silent = false) }, modifier = Modifier.padding(padding)) { primary ->
-            val itemsToShow = if (isAdmin && customerRentals.isNotEmpty()) customerRentals else listOf(primary)
+            val itemsToShow = if (customerRentals.isNotEmpty()) customerRentals else listOf(primary)
             val grandTotal = itemsToShow.sumOf { it.totalPrice + it.lateFee }
             val totalUnits = itemsToShow.sumOf { it.quantity }
 
@@ -427,6 +494,7 @@ fun RentalDetailScreen(
                             }
                         }
                         HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                        InfoRow("Tanggal Sewa", formatDisplayDate(primary.rentDate))
                         InfoRow("Total Jenis Barang", "${itemsToShow.size} jenis ($totalUnits unit)")
                         InfoRow(
                             "Total Tagihan Keseluruhan",

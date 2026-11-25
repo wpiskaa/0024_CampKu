@@ -67,7 +67,7 @@ class RentalDetailViewModel(private val repo: RentalRepository, private val id: 
             if (silent && result.isFailure && _state.value is UiState.Success) return@launch
             result.onSuccess { primary ->
                 val allForCustomer = repo.list(null, null).getOrNull()
-                    ?.filter { it.customerId == primary.customerId }
+                    ?.filter { it.customerId == primary.customerId && it.rentDate == primary.rentDate }
                     ?.sortedWith(compareBy<Rental> { it.id != primary.id }.thenByDescending { it.id })
                     ?: listOf(primary)
                 _customerRentals.value = allForCustomer
