@@ -75,6 +75,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.example.campku.CampKuApp
+import com.example.campku.PortraitCaptureActivity
 import com.example.campku.appViewModel
 import com.example.campku.data.local.PhotoStorage
 import com.example.campku.data.model.Equipment
@@ -182,6 +183,7 @@ fun RentalListScreen(navController: NavHostController, isAdmin: Boolean) {
 
     fun startQrCameraScan() {
         val options = ScanOptions().apply {
+            setCaptureActivity(PortraitCaptureActivity::class.java)
             setDesiredBarcodeFormats(ScanOptions.QR_CODE)
             setPrompt("Arahkan kamera ke QR Code Booking Pass penyewa")
             setBeepEnabled(true)
@@ -651,15 +653,17 @@ fun RentalDetailScreen(
     var deleteTarget by remember { mutableStateOf<Rental?>(null) }
     var statusTarget by remember { mutableStateOf<Pair<Rental, String>?>(null) }
     var discountTarget by remember { mutableStateOf<Rental?>(null) }
-    var showReceipt by remember { mutableStateOf(false) }
+    var receiptBundle by remember { mutableStateOf<Pair<Rental, List<Rental>>?>(null) }
 
     OnResume { vm.load() }
     MessageEffect(message, snackbar, vm::consumeMessage)
     LaunchedEffect(deleted) { if (deleted) onBack() }
 
     val primaryForActions = (state as? com.example.campku.ui.components.UiState.Success)?.data
-    val itemsForActions = if (primaryForActions != null) {
-        if (customerRentals.isNotEmpty()) customerRentals else listOf(primaryForActions)
+    val latestDateItems = if (primaryForActions != null) {
+        val list = if (customerRentals.isNotEmpty()) customerRentals else listOf(primaryForActions)
+        val latestDate = list.maxOf { it.rentDate }
+        list.filter { it.rentDate == latestDate }
     } else emptyList()
 
     SubScreen(
@@ -667,8 +671,8 @@ fun RentalDetailScreen(
         onBack = onBack,
         snackbarHostState = snackbar,
         actions = {
-            if (primaryForActions != null) {
-                IconButton(onClick = { showReceipt = true }) {
+            if (latestDateItems.isNotEmpty()) {
+                IconButton(onClick = { receiptBundle = latestDateItems.first() to latestDateItems }) {
                     Icon(Icons.Filled.ReceiptLong, contentDescription = "Nota Digital")
                 }
             }
@@ -676,14 +680,18 @@ fun RentalDetailScreen(
     ) { padding ->
         StateContent(state, onRetry = { vm.load(silent = false) }, modifier = Modifier.padding(padding)) { primary ->
             val itemsToShow = if (customerRentals.isNotEmpty()) customerRentals else listOf(primary)
-            val grandTotal = itemsToShow.sumOf { it.totalPrice + it.lateFee }
-            val totalUnits = itemsToShow.sumOf { it.quantity }
+            val dateGroups = remember(itemsToShow) {
+                itemsToShow.groupBy { it.rentDate }
+                    .entries
+                    .sortedByDescending { it.key }
+                    .map { it.key to it.value }
+            }
 
             Column(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                // 1. Kartu Ringkasan Orang Penyewa
+                // 1. Kartu Identitas Orang Penyewa
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(18.dp),
@@ -718,43 +726,39 @@ fun RentalDetailScreen(
                                 )
                             }
                         }
-                        HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                        InfoRow("Tanggal Sewa", formatDisplayDate(primary.rentDate))
-                        InfoRow("Total Jenis Barang", "${itemsToShow.size} jenis ($totalUnits unit)")
-                        InfoRow(
-                            "Total Tagihan Keseluruhan",
-                            formatRupiah(grandTotal),
-                            valueColor = MaterialTheme.colorScheme.primary,
-                        )
                     }
                 }
 
-                // 2. Kartu Tiket / Booking Pass (QR Code + Kode Booking + Nota Digital & Kirim WhatsApp)
-                BookingPassCard(
-                    primary = primary,
-                    items = itemsToShow,
-                    onOpenReceipt = { showReceipt = true },
-                )
-
-                SectionTitle("Daftar Barang yang Disewa (${itemsToShow.size})")
-
-                // 2. Rincian Setiap Barang yang Disewa oleh Penyewa Tersebut
-                itemsToShow.forEachIndexed { index, r ->
-                    RentalEquipmentDetailCard(
-                        index = index + 1,
-                        r = r,
-                        isAdmin = isAdmin,
-                        busy = busy,
-                        photoVersion = photoVersion,
-                        storage = storage,
-                        onEdit = { onEdit(r.id) },
-                        onDelete = { deleteTarget = r },
-                        onApplyBonusDay = { vm.applyBonusDay(r.id) },
-                        onOpenDiscount = { discountTarget = r },
-                        onUploadPickupPhoto = { uri -> vm.uploadPickupPhoto(r.id, uri) },
-                        onUploadReturnPhoto = { uri -> vm.uploadReturnPhoto(r.id, uri) },
-                        onConfirmStatus = { nextStatus -> statusTarget = r to nextStatus },
+                // 2. Dipisahkan per Tanggal/Hari Sewa (sewa kemarin tidak digabung dengan hari ini)
+                dateGroups.forEach { (rentDate, rentalsOnDate) ->
+                    val groupPrimary = rentalsOnDate.first()
+                    DateRentalSectionHeader(
+                        rentDate = rentDate,
+                        rentals = rentalsOnDate,
                     )
+                    BookingPassCard(
+                        primary = groupPrimary,
+                        items = rentalsOnDate,
+                        onOpenReceipt = { receiptBundle = groupPrimary to rentalsOnDate },
+                    )
+                    rentalsOnDate.forEachIndexed { index, r ->
+                        RentalEquipmentDetailCard(
+                            index = index + 1,
+                            r = r,
+                            isAdmin = isAdmin,
+                            busy = busy,
+                            photoVersion = photoVersion,
+                            storage = storage,
+                            onEdit = { onEdit(r.id) },
+                            onDelete = { deleteTarget = r },
+                            onApplyBonusDay = { vm.applyBonusDay(r.id) },
+                            onOpenDiscount = { discountTarget = r },
+                            onUploadPickupPhoto = { uri -> vm.uploadPickupPhoto(r.id, uri) },
+                            onUploadReturnPhoto = { uri -> vm.uploadReturnPhoto(r.id, uri) },
+                            onConfirmStatus = { nextStatus -> statusTarget = r to nextStatus },
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
                 }
             }
         }
@@ -771,11 +775,11 @@ fun RentalDetailScreen(
         )
     }
 
-    if (showReceipt && primaryForActions != null) {
+    receiptBundle?.let { (groupPrimary, groupItems) ->
         DigitalReceiptDialog(
-            primary = primaryForActions,
-            items = itemsForActions,
-            onDismiss = { showReceipt = false },
+            primary = groupPrimary,
+            items = groupItems,
+            onDismiss = { receiptBundle = null },
         )
     }
 
