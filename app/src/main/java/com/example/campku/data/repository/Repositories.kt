@@ -15,6 +15,7 @@ import com.example.campku.data.model.ProfileUpdateRequest
 import com.example.campku.data.model.RegisterRequest
 import com.example.campku.data.model.Rental
 import com.example.campku.data.model.RentalRequest
+import com.example.campku.data.model.RevenueReport
 import com.example.campku.data.model.StatusRequest
 import com.example.campku.data.model.User
 import com.example.campku.data.model.UserRequest
@@ -145,6 +146,7 @@ class RentalRepository(private val api: ApiService, private val photos: PhotoSto
         apiCall { api.getRentals(search?.trim()?.ifEmpty { null }, status?.ifEmpty { null }) }
 
     suspend fun get(id: Int) = apiCall { api.getRental(id) }
+    suspend fun getByCode(code: String) = apiCall { api.getRentalByCode(code.trim()) }
     suspend fun create(r: RentalRequest) = apiCall { api.createRental(r) }
     suspend fun update(id: Int, r: RentalRequest) = apiCall { api.updateRental(id, r) }
     suspend fun changeStatus(id: Int, status: String) = apiCall { api.updateRentalStatus(id, StatusRequest(status)) }
@@ -192,5 +194,6 @@ class UserRepository(private val api: ApiService) {
 
 class DashboardRepository(private val api: ApiService) {
     suspend fun get(): Result<Dashboard> = apiCall { api.getDashboard() }
+    suspend fun report(): Result<RevenueReport> = apiCall { api.getRevenueReport() }
 }
 

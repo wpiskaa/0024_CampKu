@@ -112,8 +112,9 @@ router.get('/', asyncHandler(async (req, res) => {
   }
   const search = String(req.query.search || '').trim();
   if (search) {
-    where.push('(c.name LIKE ? OR e.name LIKE ?)');
-    params.push(likePattern(search), likePattern(search));
+    where.push("(c.name LIKE ? OR e.name LIKE ? OR CONCAT('CK-', REPLACE(r.rent_date, '-', ''), '-', LPAD(r.id, 4, '0')) LIKE ? OR CAST(r.id AS CHAR) = ?)");
+    const numericId = search.replace(/^#/, '').replace(/^0+/, '') || search;
+    params.push(likePattern(search), likePattern(search), likePattern(search), numericId);
   }
   const status = String(req.query.status || '').trim().toLowerCase();
   if (status === 'terlambat') {
@@ -128,6 +129,21 @@ router.get('/', asyncHandler(async (req, res) => {
   const sql = `${SELECT}${where.length ? ' WHERE ' + where.join(' AND ') : ''} ORDER BY r.id DESC`;
   const [rows] = await pool.query(sql, params);
   res.json(rows.map(decorateRental));
+}));
+
+// Cari / verifikasi penyewaan langsung berdasarkan Kode Booking (mis. CK-20261125-0005 atau 5)
+router.get('/code/:code', asyncHandler(async (req, res) => {
+  const raw = String(req.params.code || '').trim().toUpperCase();
+  if (!raw) throw new HttpError(400, 'Kode booking wajib diisi');
+  const match = raw.match(/(\d+)$/);
+  if (!match) throw new HttpError(404, 'Format kode booking tidak dikenali');
+  const id = toInt(match[1]);
+  if (id === null || id <= 0) throw new HttpError(404, 'Kode booking tidak ditemukan');
+  const rental = await findOr404(id, req.user);
+  if (raw.startsWith('CK-') && rental.booking_code !== raw) {
+    throw new HttpError(404, 'Kode booking tidak cocok dengan data penyewaan');
+  }
+  res.json(rental);
 }));
 
 router.get('/:id', asyncHandler(async (req, res) => {

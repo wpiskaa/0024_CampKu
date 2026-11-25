@@ -15,6 +15,7 @@ import com.example.campku.data.model.ProfileUpdateRequest
 import com.example.campku.data.model.RegisterRequest
 import com.example.campku.data.model.Rental
 import com.example.campku.data.model.RentalRequest
+import com.example.campku.data.model.RevenueReport
 import com.example.campku.data.model.StatusRequest
 import com.example.campku.data.model.User
 import com.example.campku.data.model.UserRequest
@@ -114,6 +115,9 @@ interface ApiService {
         @Query("status") status: String? = null,
     ): List<Rental>
 
+    @GET("api/rentals/code/{code}")
+    suspend fun getRentalByCode(@Path("code") code: String): Rental
+
     @GET("api/rentals/{id}")
     suspend fun getRental(@Path("id") id: Int): Rental
 
@@ -159,8 +163,11 @@ interface ApiService {
     @DELETE("api/users/{id}")
     suspend fun deleteUser(@Path("id") id: Int): MessageResponse
 
-    // ----- Dashboard -----
+    // ----- Dashboard & Laporan -----
     @GET("api/dashboard")
     suspend fun getDashboard(): Dashboard
+
+    @GET("api/dashboard/reports")
+    suspend fun getRevenueReport(): RevenueReport
 }
 

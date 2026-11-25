@@ -24,10 +24,19 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** FR-07: daftar penyewaan, cari (pelanggan/alat) dan filter status. null = semua status. */
+/** FR-07: daftar penyewaan, cari (pelanggan/alat/kode booking) dan filter status. null = semua status. */
 class RentalListViewModel(private val repo: RentalRepository) : ListViewModel<Rental, String?>(null) {
     override suspend fun fetch(search: String, filter: String?) = repo.list(search, filter)
     override suspend fun deleteById(id: Int) = repo.delete(id)
+
+    fun findByBookingCode(code: String, onFound: (Int) -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            repo.getByCode(code).fold(
+                onSuccess = { onFound(it.id) },
+                onFailure = { onError(it.message ?: "Kode booking tidak ditemukan") },
+            )
+        }
+    }
 }
 
 /**

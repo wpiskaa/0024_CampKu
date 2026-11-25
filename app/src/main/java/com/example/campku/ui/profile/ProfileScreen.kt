@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AddShoppingCart
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Description
@@ -357,6 +358,14 @@ fun ProfileScreen(navController: NavHostController, user: User) {
             // 3. Manajemen Khusus Admin
             if (user.isAdmin) {
                 ProfileMenuSection(title = "Manajemen Admin") {
+                    ProfileMenuItem(
+                        icon = Icons.Filled.BarChart,
+                        title = "Laporan Pendapatan & Grafik",
+                        subtitle = "Omzet bulanan, denda & alat paling menguntungkan",
+                        iconTint = MaterialTheme.colorScheme.secondary,
+                        onClick = { navController.navigate(Routes.REPORTS) { launchSingleTop = true } },
+                    )
+                    ProfileMenuDivider()
                     ProfileMenuItem(
                         icon = Icons.Filled.ManageAccounts,
                         title = "Kelola Akun Pengguna",

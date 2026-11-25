@@ -128,7 +128,8 @@ Semua endpoint selain register, login, dan refresh wajib header `Authorization: 
 | GET | `/api/customers?search=` | Daftar dan cari pelanggan (nama/HP) | Admin |
 | GET | `/api/customers/:id` | Detail pelanggan | Admin |
 | POST, PUT, DELETE | `/api/customers(/:id)` | Tambah, ubah, hapus pelanggan | Admin |
-| GET | `/api/rentals?search=&status=` | Daftar sewa (Penyewa: hanya miliknya) | Login |
+| GET | `/api/rentals?search=&status=` | Daftar sewa (cari nama/alat/kode booking; Penyewa hanya miliknya) | Login |
+| GET | `/api/rentals/code/:code` | Cari & verifikasi penyewaan berdasarkan Kode Booking (`CK-...`) | Login |
 | GET | `/api/rentals/:id` | Detail sewa | Login |
 | POST | `/api/rentals` | Buat penyewaan (status awal Dipesan) | Login |
 | PUT | `/api/rentals/:id` | Ubah penyewaan (hanya status Dipesan) | Admin |
@@ -142,6 +143,7 @@ Semua endpoint selain register, login, dan refresh wajib header `Authorization: 
 | GET | `/api/users/:id` | Detail pengguna | Admin |
 | POST, PUT, DELETE | `/api/users(/:id)` | Tambah, ubah, hapus pengguna | Admin |
 | GET | `/api/dashboard` | Ringkasan dashboard laporan | Admin |
+| GET | `/api/dashboard/reports` | Laporan pendapatan, grafik 6 bulan & top alat menguntungkan | Admin |
 
 Nilai `status` untuk filter: `dipesan`, `disewa`, `dikembalikan`, `terlambat`.
 

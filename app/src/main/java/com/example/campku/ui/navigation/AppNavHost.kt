@@ -36,6 +36,7 @@ import com.example.campku.ui.profile.ProfileScreen
 import com.example.campku.ui.rental.RentalDetailScreen
 import com.example.campku.ui.rental.RentalFormScreen
 import com.example.campku.ui.rental.RentalListScreen
+import com.example.campku.ui.report.ReportScreen
 import com.example.campku.ui.user.UserFormScreen
 import com.example.campku.ui.user.UserListScreen
 
@@ -178,10 +179,13 @@ fun AppNavHost(sessionState: SessionState) {
             }
         }
 
-        // Pengguna (Admin)
+        // Pengguna & Laporan (Admin)
         composable(Routes.USERS) { if (user?.isAdmin == true) UserListScreen(navController, user) }
         composable(Routes.USER_FORM, idArg) { entry ->
             if (user?.isAdmin == true) UserFormScreen(entry.intArg("id"), user) { navController.safePopBack() }
+        }
+        composable(Routes.REPORTS) {
+            if (user?.isAdmin == true) ReportScreen(onBack = { navController.safePopBack() })
         }
     }
 }

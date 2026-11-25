@@ -76,9 +76,17 @@ function addDaysStr(dateStr, daysToAdd) {
  *  - days       : durasi sewa
  *  - bonus_days : jumlah hari bonus gratis dari promo Admin (sewa >= 2 hari dapat +1 hari)
  */
+/** Membuat kode booking unik yang mudah dibaca, mis. CK-20261125-0005. */
+function formatBookingCode(rentDate, id) {
+  const cleanDate = String(rentDate || '').replace(/-/g, '');
+  const paddedId = String(id || 0).padStart(4, '0');
+  return `CK-${cleanDate}-${paddedId}`;
+}
+
 function decorateRental(row) {
   const today = todayStr();
   const out = { ...row };
+  out.booking_code = formatBookingCode(row.rent_date, row.id);
   out.days = rentalDays(row.rent_date, row.due_date);
   out.bonus_days = Number(row.bonus_days || 0);
   out.discount_percent = Number(row.discount_percent || 0);
@@ -99,6 +107,6 @@ function decorateRental(row) {
 }
 
 module.exports = {
-  todayStr, parseDate, addDaysStr, rentalDays, calcTotal, lateDays, calcLateFee, validateDates, decorateRental,
+  todayStr, parseDate, addDaysStr, formatBookingCode, rentalDays, calcTotal, lateDays, calcLateFee, validateDates, decorateRental,
 };
 

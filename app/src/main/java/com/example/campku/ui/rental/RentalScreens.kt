@@ -32,6 +32,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.QrCode2
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Warning
@@ -76,8 +78,10 @@ import com.example.campku.data.model.Equipment
 import com.example.campku.data.model.Rental
 import com.example.campku.data.model.RentalStatus
 import com.example.campku.ui.components.AppTextField
+import com.example.campku.ui.components.BookingPassCard
 import com.example.campku.ui.components.ConfirmDialog
 import com.example.campku.ui.components.DateField
+import com.example.campku.ui.components.DigitalReceiptDialog
 import com.example.campku.ui.components.DropdownField
 import com.example.campku.ui.components.EmptyState
 import com.example.campku.ui.components.ErrorState
@@ -154,6 +158,7 @@ fun RentalListScreen(navController: NavHostController, isAdmin: Boolean) {
     val filter by vm.filter.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
+    var showCodeLookup by remember { mutableStateOf(false) }
 
     OnResume(vm::refresh)
     MessageEffect(message, snackbar, vm::consumeMessage)
@@ -163,6 +168,13 @@ fun RentalListScreen(navController: NavHostController, isAdmin: Boolean) {
         isAdmin = isAdmin,
         title = if (isAdmin) "Daftar Penyewa" else "Sewa Saya",
         snackbarHostState = snackbar,
+        actions = {
+            if (isAdmin) {
+                IconButton(onClick = { showCodeLookup = true }) {
+                    Icon(Icons.Filled.QrCode2, contentDescription = "Verifikasi kode booking")
+                }
+            }
+        },
         floatingActionButton = {
             FloatingActionButton(onClick = { navController.navigate(Routes.rentalForm()) { launchSingleTop = true } }) {
                 Icon(Icons.Filled.Add, "Buat sewa")
@@ -173,7 +185,7 @@ fun RentalListScreen(navController: NavHostController, isAdmin: Boolean) {
             SearchField(
                 value = search,
                 onValueChange = vm::onSearchChange,
-                placeholder = if (isAdmin) "Cari nama penyewa atau alat" else "Cari nama alat",
+                placeholder = if (isAdmin) "Cari nama, alat, atau kode booking" else "Cari nama alat atau kode booking",
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
             )
             LazyRow(
@@ -252,6 +264,72 @@ fun RentalListScreen(navController: NavHostController, isAdmin: Boolean) {
             }
         }
     }
+
+    if (showCodeLookup) {
+        BookingCodeLookupDialog(
+            onVerify = { code, onErr ->
+                vm.findByBookingCode(
+                    code = code,
+                    onFound = { foundId ->
+                        showCodeLookup = false
+                        navController.navigate(Routes.rentalDetail(foundId)) { launchSingleTop = true }
+                    },
+                    onError = onErr,
+                )
+            },
+            onDismiss = { showCodeLookup = false },
+        )
+    }
+}
+
+/** Dialog verifikasi cepat Kode Booking (mis. CK-20261125-0005 atau 5) untuk Admin. */
+@Composable
+private fun BookingCodeLookupDialog(
+    onVerify: (String, (String) -> Unit) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var code by remember { mutableStateOf("") }
+    var loading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Filled.QrCode2, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+        title = { Text("Verifikasi Kode Booking", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Masukkan Kode Booking dari tiket penyewa (contoh: CK-20261125-0005 atau nomor ID).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                AppTextField(
+                    value = code,
+                    onValueChange = { code = it.uppercase(); error = null },
+                    label = "Kode Booking",
+                    error = error,
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = !loading && code.isNotBlank(),
+                onClick = {
+                    loading = true
+                    error = null
+                    onVerify(code.trim()) { err ->
+                        loading = false
+                        error = err
+                    }
+                },
+            ) {
+                Text(if (loading) "Mencari..." else "Buka Pesanan")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Batal") }
+        },
+    )
 }
 
 /** Header pemisah tanggal/bulan/tahun pada daftar Sewa Saya agar sewa di hari berbeda tidak digabung. */
@@ -439,15 +517,28 @@ fun RentalDetailScreen(
     var deleteTarget by remember { mutableStateOf<Rental?>(null) }
     var statusTarget by remember { mutableStateOf<Pair<Rental, String>?>(null) }
     var discountTarget by remember { mutableStateOf<Rental?>(null) }
+    var showReceipt by remember { mutableStateOf(false) }
 
     OnResume { vm.load() }
     MessageEffect(message, snackbar, vm::consumeMessage)
     LaunchedEffect(deleted) { if (deleted) onBack() }
 
+    val primaryForActions = (state as? com.example.campku.ui.components.UiState.Success)?.data
+    val itemsForActions = if (primaryForActions != null) {
+        if (customerRentals.isNotEmpty()) customerRentals else listOf(primaryForActions)
+    } else emptyList()
+
     SubScreen(
         title = if (isAdmin) "Detail Sewa Pelanggan" else "Detail Sewa",
         onBack = onBack,
         snackbarHostState = snackbar,
+        actions = {
+            if (primaryForActions != null) {
+                IconButton(onClick = { showReceipt = true }) {
+                    Icon(Icons.Filled.ReceiptLong, contentDescription = "Nota Digital")
+                }
+            }
+        },
     ) { padding ->
         StateContent(state, onRetry = { vm.load(silent = false) }, modifier = Modifier.padding(padding)) { primary ->
             val itemsToShow = if (customerRentals.isNotEmpty()) customerRentals else listOf(primary)
@@ -504,6 +595,13 @@ fun RentalDetailScreen(
                     }
                 }
 
+                // 2. Kartu Tiket / Booking Pass (QR Code + Kode Booking + Nota Digital & Kirim WhatsApp)
+                BookingPassCard(
+                    primary = primary,
+                    items = itemsToShow,
+                    onOpenReceipt = { showReceipt = true },
+                )
+
                 SectionTitle("Daftar Barang yang Disewa (${itemsToShow.size})")
 
                 // 2. Rincian Setiap Barang yang Disewa oleh Penyewa Tersebut
@@ -536,6 +634,14 @@ fun RentalDetailScreen(
                 discountTarget = null
             },
             onDismiss = { discountTarget = null },
+        )
+    }
+
+    if (showReceipt && primaryForActions != null) {
+        DigitalReceiptDialog(
+            primary = primaryForActions,
+            items = itemsForActions,
+            onDismiss = { showReceipt = false },
         )
     }
 

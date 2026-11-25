@@ -141,7 +141,11 @@ data class Rental(
     @SerializedName("discount_amount") val discountAmount: Int = 0,
     @SerializedName("is_late") val isLate: Boolean = false,
     @SerializedName("late_days") val lateDays: Int = 0,
-)
+    @SerializedName("booking_code") val bookingCode: String = "",
+) {
+    val displayBookingCode: String
+        get() = bookingCode.ifBlank { "CK-${rentDate.replace("-", "")}-${id.toString().padStart(4, '0')}" }
+}
 
 data class RentalRequest(
     @SerializedName("customer_id") val customerId: Int?,
@@ -178,5 +182,36 @@ data class Dashboard(
     @SerializedName("late_rentals") val lateRentals: Int = 0,
     @SerializedName("returned_rentals") val returnedRentals: Int = 0,
     @SerializedName("total_customers") val totalCustomers: Int = 0,
+)
+
+data class MonthlyRevenue(
+    val month: String = "",
+    val label: String = "",
+    val revenue: Int = 0,
+    @SerializedName("late_fee") val lateFee: Int = 0,
+    val total: Int = 0,
+    val count: Int = 0,
+)
+
+data class TopEquipmentReport(
+    val id: Int = 0,
+    val name: String = "",
+    @SerializedName("category_name") val categoryName: String = "",
+    @SerializedName("rent_count") val rentCount: Int = 0,
+    @SerializedName("total_units") val totalUnits: Int = 0,
+    @SerializedName("total_revenue") val totalRevenue: Int = 0,
+)
+
+data class RevenueReport(
+    @SerializedName("total_revenue") val totalRevenue: Int = 0,
+    @SerializedName("total_late_fees") val totalLateFees: Int = 0,
+    @SerializedName("grand_total") val grandTotal: Int = 0,
+    @SerializedName("completed_revenue") val completedRevenue: Int = 0,
+    @SerializedName("active_revenue") val activeRevenue: Int = 0,
+    @SerializedName("pending_revenue") val pendingRevenue: Int = 0,
+    @SerializedName("total_discounts") val totalDiscounts: Int = 0,
+    @SerializedName("total_transactions") val totalTransactions: Int = 0,
+    @SerializedName("monthly_revenue") val monthlyRevenue: List<MonthlyRevenue> = emptyList(),
+    @SerializedName("top_equipments") val topEquipments: List<TopEquipmentReport> = emptyList(),
 )
 

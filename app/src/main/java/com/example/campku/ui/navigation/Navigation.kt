@@ -83,6 +83,7 @@ object Routes {
 
     const val PROFILE = "profile"
     const val SETTINGS = "settings"
+    const val REPORTS = "reports"
 
     fun home(isAdmin: Boolean) = if (isAdmin) HOME_ADMIN else HOME_USER
 

@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.CheckCircle
@@ -87,6 +88,15 @@ fun HomeScreen(navController: NavHostController, user: User) {
                         loading = false,
                     )
                     if (isAdmin) {
+                        OutlinedButton(
+                            onClick = { navController.navigate(Routes.REPORTS) { launchSingleTop = true } },
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            shape = RoundedCornerShape(14.dp),
+                        ) {
+                            Icon(Icons.Filled.BarChart, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Laporan Pendapatan & Grafik Statistik")
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             OutlinedButton(
                                 onClick = { navController.navigate(Routes.CATEGORIES) { launchSingleTop = true } },
