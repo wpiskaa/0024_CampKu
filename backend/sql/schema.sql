@@ -71,6 +71,8 @@ CREATE TABLE IF NOT EXISTS rentals (
   due_date          DATE NOT NULL,
   return_date       DATE NULL,
   total_price       INT UNSIGNED NOT NULL DEFAULT 0,
+  discount_percent  INT UNSIGNED NOT NULL DEFAULT 0,
+  bonus_days        INT UNSIGNED NOT NULL DEFAULT 0,
   late_fee          INT UNSIGNED NOT NULL DEFAULT 0,
   status            ENUM('dipesan','disewa','dikembalikan') NOT NULL DEFAULT 'dipesan',
   pickup_photo_path VARCHAR(255) NULL,

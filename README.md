@@ -80,10 +80,12 @@ Dipesan ──(Admin: Foto Sebelum Sewa + Mulai Sewa, stok berkurang)──▶ D
                                                                         └─ lewat tanggal kembali ⇒ penanda "Terlambat" otomatis
 ```
 
-- **Pilih banyak alat sekaligus**: Saat membuat penyewaan baru, pengguna/admin dapat menambahkan beberapa jenis alat sekaligus dalam satu pengajuan.
+- **Pilih banyak alat sekaligus dengan katalog foto**: Saat membuat penyewaan baru, pengguna/admin dapat memilih beberapa jenis alat sekaligus melalui dialog katalog visual (foto, nama detail, kategori, harga, stok).
+- **Pemisahan riwayat per Tanggal / Bulan / Tahun**: Di halaman **Sewa Saya** (Penyewa) dan **Daftar Penyewa** (Admin), transaksi di hari yang berbeda dipisahkan berdasarkan tanggal sewa agar tidak tercampur.
+- **Sistem Diskon & Bonus Hari (Admin)**: Admin dapat memberikan potongan diskon (`0%–100%`) maupun bonus `+1` hari gratis (untuk sewa minimal 2 hari) melalui Form Sewa atau Detail Sewa.
 - **Wajib dokumentasi foto sebelum & sesudah sewa**: Perubahan status `Dipesan -> Disewa` mewajibkan foto kondisi alat sebelum disewa (`pickup_photo_path`), dan `Disewa -> Dikembalikan` mewajibkan foto kondisi alat saat dikembalikan (`return_photo_path`).
-- **Biaya sewa** = jumlah hari × harga sewa per hari × jumlah alat (sewa dan kembali di hari yang sama dihitung 1 hari).
-- **Denda** = hari terlambat × 10% × harga sewa per hari × jumlah alat. Untuk sewa yang masih berjalan, denda tampil sebagai hitungan berjalan sampai hari ini.
+- **Biaya sewa** = jumlah hari × harga sewa per hari × jumlah alat − diskon (sewa dan kembali di hari yang sama dihitung 1 hari).
+- **Denda keterlambatan** = hari terlambat × tarif sewa 1 hari penuh (`harga sewa per hari × jumlah alat`). Untuk sewa yang masih berjalan dan lewat jatuh tempo, denda tampil sebagai hitungan berjalan sampai hari ini.
 - Data sewa hanya dapat diubah selama berstatus **Dipesan** agar stok tetap konsisten.
 
 ## Desain Database (ERD)
@@ -100,7 +102,7 @@ erDiagram
     categories { int id PK  string name UK  string description }
     equipments { int id PK  int category_id FK  string name  int daily_price  int stock  text description  string photo_path }
     customers { int id PK  int user_id FK  string name  string phone  string address  string id_number }
-    rentals { int id PK  int customer_id FK  int equipment_id FK  int processed_by FK  int quantity  date rent_date  date due_date  date return_date  int total_price  int late_fee  enum status  string pickup_photo_path  string return_photo_path  timestamp created_at }
+    rentals { int id PK  int customer_id FK  int equipment_id FK  int processed_by FK  int quantity  date rent_date  date due_date  date return_date  int total_price  int discount_percent  int bonus_days  int late_fee  enum status  string pickup_photo_path  string return_photo_path  timestamp created_at }
 ```
 
 ## Daftar Endpoint REST API
@@ -114,6 +116,7 @@ Semua endpoint selain register, login, dan refresh wajib header `Authorization: 
 | POST | `/api/auth/refresh` | Tukar & rotasi refresh token baru | Publik |
 | POST | `/api/auth/logout` | Hapus refresh token di server | Login |
 | GET | `/api/auth/me` | Data profil akun sendiri | Login |
+| PUT | `/api/auth/me` | Ubah profil, kontak, alamat, identitas & password sendiri | Login |
 | GET | `/api/equipments?search=&category_id=` | Daftar, cari, dan filter kategori alat | Login |
 | GET | `/api/equipments/popular` | Daftar 5 alat paling sering disewa | Login |
 | GET | `/api/equipments/:id` | Detail alat | Login |
@@ -130,6 +133,8 @@ Semua endpoint selain register, login, dan refresh wajib header `Authorization: 
 | POST | `/api/rentals` | Buat penyewaan (status awal Dipesan) | Login |
 | PUT | `/api/rentals/:id` | Ubah penyewaan (hanya status Dipesan) | Admin |
 | PATCH | `/api/rentals/:id/status` | Ubah status, stok otomatis, hitung denda (wajib foto) | Admin |
+| POST | `/api/rentals/:id/discount` | Terapkan potongan diskon (0–100%) pada sewa | Admin |
+| POST | `/api/rentals/:id/bonus-day` | Berikan bonus +1 hari gratis (sewa min. 2 hari) | Admin |
 | POST | `/api/rentals/:id/pickup-photo` | Unggah foto kondisi alat sebelum disewa | Admin |
 | POST | `/api/rentals/:id/return-photo` | Unggah foto kondisi alat saat dikembalikan | Admin |
 | DELETE | `/api/rentals/:id` | Hapus penyewaan (kembalikan stok jika Disewa) | Admin |
