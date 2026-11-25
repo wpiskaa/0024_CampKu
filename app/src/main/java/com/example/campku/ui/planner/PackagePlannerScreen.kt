@@ -4,7 +4,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,27 +13,22 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,6 +37,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -56,16 +52,16 @@ import com.example.campku.data.model.RentalRequest
 import com.example.campku.data.repository.CustomerRepository
 import com.example.campku.data.repository.EquipmentRepository
 import com.example.campku.data.repository.RentalRepository
+import com.example.campku.ui.components.AppTextField
 import com.example.campku.ui.components.DateField
 import com.example.campku.ui.components.DropdownField
 import com.example.campku.ui.components.ErrorState
 import com.example.campku.ui.components.LoadingButton
 import com.example.campku.ui.components.PhotoImage
-import com.example.campku.ui.components.SectionTitle
 import com.example.campku.ui.components.StatusChip
 import com.example.campku.ui.components.SubScreen
+import com.example.campku.ui.components.appFieldColors
 import com.example.campku.ui.theme.StatusLate
-import com.example.campku.ui.theme.StatusReturned
 import com.example.campku.util.addDaysIso
 import com.example.campku.util.formatDisplayDate
 import com.example.campku.util.formatRupiah
@@ -83,24 +79,27 @@ data class PackagePlannerState(
     val equipments: List<Equipment> = emptyList(),
     val customers: List<Customer> = emptyList(),
     val customerId: Int? = null,
-    val people: Int = 2,
-    val days: Int = 2,
+    val peopleInput: String = "",
+    val daysInput: String = "",
     val rentDate: String = todayIso(),
-    /** Peta equipmentId -> jumlah unit yang direkomendasikan/dipilih (0 = tidak dipilih). */
-    val quantities: Map<Int, Int> = emptyMap(),
+    val generated: Boolean = false,
+    /** Peta equipmentId -> jumlah unit (String agar bisa diedit manual). */
+    val quantities: Map<Int, String> = emptyMap(),
     val saving: Boolean = false,
     val error: String? = null,
     val saved: Boolean = false,
 ) {
-    val dueDate: String get() = addDaysIso(rentDate, days)
+    val people: Int get() = peopleInput.trim().toIntOrNull() ?: 0
+    val days: Int get() = daysInput.trim().toIntOrNull() ?: 0
+    val dueDate: String get() = addDaysIso(rentDate, days.coerceAtLeast(1))
 }
 
 /** Menghitung rekomendasi jumlah alat otomatis berdasarkan jumlah orang & stok tersedia. */
-private fun computeRecommendedQuantities(people: Int, equipments: List<Equipment>): Map<Int, Int> {
+private fun computeRecommendedQuantities(people: Int, equipments: List<Equipment>): Map<Int, String> {
+    if (people <= 0) return emptyMap()
     val result = mutableMapOf<Int, Int>()
     val available = equipments.filter { it.stock > 0 }
 
-    // 1. Tenda: cocokkan kapasitas 4 dan kapasitas 2
     val tent4 = available.firstOrNull {
         val n = it.name.lowercase()
         (n.contains("tenda") || it.categoryName.orEmpty().lowercase().contains("tenda")) && n.contains("4")
@@ -131,36 +130,24 @@ private fun computeRecommendedQuantities(people: Int, equipments: List<Equipment
         if (extra > 0) result[tent4.id] = cur + extra
     }
 
-    // 2. Sleeping Bag: 1 per orang
     available.firstOrNull {
         it.name.lowercase().contains("sleeping") || it.categoryName.orEmpty().lowercase().contains("sleeping")
-    }?.let { sb ->
-        result[sb.id] = people.coerceAtMost(sb.stock)
-    }
+    }?.let { sb -> result[sb.id] = people.coerceAtMost(sb.stock) }
 
-    // 3. Carrier: 1 per 2 orang (min 1)
     available.firstOrNull {
         it.name.lowercase().contains("carrier") || it.categoryName.orEmpty().lowercase().contains("carrier")
-    }?.let { carrier ->
-        result[carrier.id] = ceil(people / 2.0).toInt().coerceAtLeast(1).coerceAtMost(carrier.stock)
-    }
+    }?.let { carrier -> result[carrier.id] = ceil(people / 2.0).toInt().coerceAtLeast(1).coerceAtMost(carrier.stock) }
 
-    // 4. Kompor: 1 per 4 orang (min 1)
     available.firstOrNull {
         it.name.lowercase().contains("kompor") || it.categoryName.orEmpty().lowercase().contains("kompor")
-    }?.let { stove ->
-        result[stove.id] = ceil(people / 4.0).toInt().coerceAtLeast(1).coerceAtMost(stove.stock)
-    }
+    }?.let { stove -> result[stove.id] = ceil(people / 4.0).toInt().coerceAtLeast(1).coerceAtMost(stove.stock) }
 
-    // 5. Headlamp / Aksesoris penerangan: 1 per orang
     available.firstOrNull {
         it.name.lowercase().contains("headlamp") || it.name.lowercase().contains("senter") ||
             it.categoryName.orEmpty().lowercase().contains("aksesoris")
-    }?.let { lamp ->
-        result[lamp.id] = people.coerceAtMost(lamp.stock)
-    }
+    }?.let { lamp -> result[lamp.id] = people.coerceAtMost(lamp.stock) }
 
-    return result
+    return result.mapValues { it.value.toString() }
 }
 
 class PackagePlannerViewModel(
@@ -191,31 +178,57 @@ class PackagePlannerViewModel(
                 }
             } else emptyList()
 
-            val initialQty = computeRecommendedQuantities(_state.value.people, eqs)
             _state.update {
                 it.copy(
                     loading = false,
                     equipments = eqs,
                     customers = custs,
-                    quantities = initialQty,
                 )
             }
         }
     }
 
-    fun setPeople(count: Int) {
-        val clamped = count.coerceIn(1, 20)
+    fun onPeopleChange(raw: String) {
+        val digits = raw.filter(Char::isDigit).take(3)
         _state.update { s ->
+            val p = digits.toIntOrNull() ?: 0
+            val shouldGen = p > 0 && s.days > 0
             s.copy(
-                people = clamped,
-                quantities = computeRecommendedQuantities(clamped, s.equipments),
+                peopleInput = digits,
+                generated = shouldGen,
+                quantities = if (shouldGen) computeRecommendedQuantities(p, s.equipments) else emptyMap(),
                 error = null,
             )
         }
     }
 
-    fun setDays(count: Int) {
-        _state.update { it.copy(days = count.coerceIn(1, 14), error = null) }
+    fun onDaysChange(raw: String) {
+        val digits = raw.filter(Char::isDigit).take(2)
+        _state.update { s ->
+            val d = digits.toIntOrNull() ?: 0
+            val shouldGen = s.people > 0 && d > 0
+            s.copy(
+                daysInput = digits,
+                generated = shouldGen,
+                quantities = if (shouldGen) {
+                    if (s.generated && s.quantities.isNotEmpty()) s.quantities
+                    else computeRecommendedQuantities(s.people, s.equipments)
+                } else emptyMap(),
+                error = null,
+            )
+        }
+    }
+
+    fun resetRecommendation() {
+        _state.update { s ->
+            if (s.people > 0 && s.days > 0) {
+                s.copy(
+                    generated = true,
+                    quantities = computeRecommendedQuantities(s.people, s.equipments),
+                    error = null,
+                )
+            } else s
+        }
     }
 
     fun setRentDate(date: String) {
@@ -226,12 +239,13 @@ class PackagePlannerViewModel(
         _state.update { it.copy(customerId = id, error = null) }
     }
 
-    fun setItemQuantity(equipmentId: Int, qty: Int) {
+    fun setItemQuantityInput(equipmentId: Int, raw: String) {
         val maxStock = _state.value.equipments.firstOrNull { it.id == equipmentId }?.stock ?: 0
-        val clamped = qty.coerceIn(0, maxStock)
+        val digits = raw.filter(Char::isDigit).take(3)
+        val clamped = if (digits.isEmpty()) "" else (digits.toIntOrNull() ?: 0).coerceIn(0, maxStock).toString()
         _state.update { s ->
             val updated = s.quantities.toMutableMap()
-            if (clamped == 0) updated.remove(equipmentId) else updated[equipmentId] = clamped
+            if (clamped.isEmpty() || clamped == "0") updated.remove(equipmentId) else updated[equipmentId] = clamped
             s.copy(quantities = updated, error = null)
         }
     }
@@ -239,11 +253,18 @@ class PackagePlannerViewModel(
     fun submitPackage() {
         val s = _state.value
         if (s.saving) return
+        if (s.people <= 0 || s.days <= 0) {
+            _state.update { it.copy(error = "Isi jumlah orang dan durasi sewa minimal 1") }
+            return
+        }
         if (isAdmin && s.customerId == null) {
             _state.update { it.copy(error = "Silakan pilih pelanggan terlebih dahulu") }
             return
         }
-        val selected = s.quantities.filterValues { it > 0 }
+        val selected = s.quantities.mapNotNull { (eqId, qtyStr) ->
+            val q = qtyStr.toIntOrNull() ?: 0
+            if (q > 0) eqId to q else null
+        }
         if (selected.isEmpty()) {
             _state.update { it.copy(error = "Pilih minimal 1 barang dalam paket") }
             return
@@ -271,7 +292,12 @@ class PackagePlannerViewModel(
     }
 }
 
-/** Fitur Unggulan: Rekomendasi Paket Otomatis ("Hitung Kebutuhan Camping") + 1-Klik Ajukan Sewa. */
+/**
+ * Paket Otomatis ringkas & hemat ruang:
+ * - Default jumlah orang & durasi dimulai dari 0 (kosong) dan tidak menampilkan katalog.
+ * - Begitu jumlah orang & durasi diisi manual berupa angka (> 0), rekomendasi otomatis di-generate
+ *   dan jumlah tiap barang tetap dapat diatur secara manual.
+ */
 @Composable
 fun PackagePlannerScreen(
     isAdmin: Boolean,
@@ -297,139 +323,62 @@ fun PackagePlannerScreen(
                 state.loadError != null -> ErrorState(state.loadError!!, vm::load, Modifier.align(Alignment.Center))
                 else -> {
                     val selectedItems = state.equipments.mapNotNull { eq ->
-                        val qty = state.quantities[eq.id] ?: 0
+                        val qty = state.quantities[eq.id]?.toIntOrNull() ?: 0
                         if (qty > 0) eq to qty else null
                     }
                     val totalUnits = selectedItems.sumOf { it.second }
-                    val grandTotal = selectedItems.sumOf { (eq, qty) -> eq.dailyPrice * qty * state.days }
+                    val grandTotal = if (state.days > 0) {
+                        selectedItems.sumOf { (eq, qty) -> eq.dailyPrice * qty * state.days }
+                    } else 0
 
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
                             .imePadding()
                             .verticalScroll(rememberScrollState())
-                            .padding(16.dp),
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        // Kartu Header Penjelasan
+                        // Form Input Ringkas (Hemat Ruang — Input Angka Manual)
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.18f),
-                                    modifier = Modifier.size(46.dp),
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            Icons.Filled.AutoAwesome,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onPrimary,
-                                        )
-                                    }
-                                }
-                                Spacer(Modifier.width(12.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        "Hitung Kebutuhan Camping",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onPrimary,
-                                    )
-                                    Text(
-                                        "Masukkan jumlah orang & lama sewa, sistem otomatis menyiapkan rekomendasi set alat terbaik.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.9f),
-                                    )
-                                }
-                            }
-                        }
-
-                        // Pengaturan Jumlah Orang, Durasi, dan Tanggal
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(20.dp),
+                            shape = RoundedCornerShape(18.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                         ) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                // Jumlah Orang
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Filled.Groups, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        "Jumlah Orang",
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    AppTextField(
+                                        value = state.peopleInput,
+                                        onValueChange = vm::onPeopleChange,
+                                        label = "Jumlah Orang",
+                                        keyboardType = KeyboardType.Number,
                                         modifier = Modifier.weight(1f),
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
                                     )
-                                    CounterControl(
-                                        value = state.people,
-                                        suffix = "org",
-                                        onMinus = { vm.setPeople(state.people - 1) },
-                                        onPlus = { vm.setPeople(state.people + 1) },
-                                    )
-                                }
-                                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    items(listOf(1, 2, 4, 6, 8)) { p ->
-                                        FilterChip(
-                                            selected = state.people == p,
-                                            onClick = { vm.setPeople(p) },
-                                            label = { Text("$p Orang") },
-                                        )
-                                    }
-                                }
-
-                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                                // Lama Sewa
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        "Durasi Sewa",
+                                    AppTextField(
+                                        value = state.daysInput,
+                                        onValueChange = vm::onDaysChange,
+                                        label = "Durasi (Hari)",
+                                        keyboardType = KeyboardType.Number,
                                         modifier = Modifier.weight(1f),
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                    )
-                                    CounterControl(
-                                        value = state.days,
-                                        suffix = "hari",
-                                        onMinus = { vm.setDays(state.days - 1) },
-                                        onPlus = { vm.setDays(state.days + 1) },
                                     )
                                 }
-                                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    items(listOf(1, 2, 3, 4)) { d ->
-                                        FilterChip(
-                                            selected = state.days == d,
-                                            onClick = { vm.setDays(d) },
-                                            label = { Text("$d Hari") },
-                                        )
-                                    }
-                                }
-
-                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
                                 DateField(
                                     label = "Tanggal Mulai Sewa",
                                     value = state.rentDate,
                                     onValueChange = vm::setRentDate,
                                 )
-                                Text(
-                                    "Tanggal Kembali: ${formatDisplayDate(state.dueDate)} (${state.days} hari)",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-
+                                if (state.days > 0) {
+                                    Text(
+                                        "Kembali: ${formatDisplayDate(state.dueDate)} (${state.days} hari)",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                }
                                 if (isAdmin) {
                                     DropdownField(
-                                        label = "Pilih Pelanggan",
+                                        label = "Pelanggan",
                                         options = state.customers.map { it.id to "${it.name} (${it.phone})" },
                                         selectedId = state.customerId,
                                         onSelected = vm::setCustomer,
@@ -438,146 +387,181 @@ fun PackagePlannerScreen(
                             }
                         }
 
-                        // Daftar Rekomendasi Alat
-                        SectionTitle("Rekomendasi Set Alat (${selectedItems.size} jenis • $totalUnits unit)")
-
-                        state.equipments.forEach { eq ->
-                            val qty = state.quantities[eq.id] ?: 0
-                            val isChosen = qty > 0
+                        if (!state.generated) {
+                            // Default kosong: tidak menampilkan katalog sebelum user mengisi jumlah orang & durasi
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(18.dp),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = if (isChosen) MaterialTheme.colorScheme.surface
-                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                                ),
-                                border = BorderStroke(
-                                    width = if (isChosen) 1.5.dp else 1.dp,
-                                    color = if (isChosen) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                                    else MaterialTheme.colorScheme.outlineVariant,
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                                 ),
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().padding(24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
-                                    PhotoImage(
-                                        kind = PhotoStorage.KIND_EQUIPMENT,
-                                        id = eq.id,
-                                        serverPath = eq.photoPath,
-                                        modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)),
+                                    Icon(
+                                        Icons.Filled.AutoAwesome,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(32.dp),
                                     )
-                                    Spacer(Modifier.width(12.dp))
-                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                        Text(
-                                            eq.name,
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            maxLines = 2,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                        Text(
-                                            "${formatRupiah(eq.dailyPrice)}/hr • Stok ${eq.stock}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                        if (isChosen) {
-                                            Text(
-                                                "Subtotal: ${formatRupiah(eq.dailyPrice * qty * state.days)}",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = MaterialTheme.colorScheme.primary,
-                                                fontWeight = FontWeight.Bold,
+                                    Text(
+                                        "Rekomendasi Paket Otomatis",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                    Text(
+                                        "Masukkan Jumlah Orang dan Durasi Sewa di atas untuk menghasilkan rekomendasi set alat camping secara otomatis.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center,
+                                    )
+                                }
+                            }
+                        } else {
+                            // Header Rekomendasi + Tombol Reset
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(
+                                    "Rekomendasi Alat (${selectedItems.size} jenis • $totalUnits unit)",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.ExtraBold,
+                                )
+                                TextButton(onClick = vm::resetRecommendation) {
+                                    Text("Reset", style = MaterialTheme.typography.labelLarge)
+                                }
+                            }
+
+                            // Daftar Rekomendasi Ringkas & Bisa Diatur Manual
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(18.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            ) {
+                                Column(Modifier.fillMaxWidth()) {
+                                    state.equipments.forEachIndexed { idx, eq ->
+                                        val qtyStr = state.quantities[eq.id].orEmpty()
+                                        val qtyInt = qtyStr.toIntOrNull() ?: 0
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            PhotoImage(
+                                                kind = PhotoStorage.KIND_EQUIPMENT,
+                                                id = eq.id,
+                                                serverPath = eq.photoPath,
+                                                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(10.dp)),
+                                            )
+                                            Spacer(Modifier.width(10.dp))
+                                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                                Text(
+                                                    eq.name,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                                Text(
+                                                    "${formatRupiah(eq.dailyPrice)}/hr • Stok ${eq.stock}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                                if (qtyInt > 0) {
+                                                    Text(
+                                                        formatRupiah(eq.dailyPrice * qtyInt * state.days),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.primary,
+                                                        fontWeight = FontWeight.Bold,
+                                                    )
+                                                }
+                                            }
+                                            Spacer(Modifier.width(8.dp))
+                                            if (eq.stock <= 0) {
+                                                StatusChip("Habis", StatusLate)
+                                            } else {
+                                                OutlinedTextField(
+                                                    value = qtyStr,
+                                                    onValueChange = { v -> vm.setItemQuantityInput(eq.id, v) },
+                                                    placeholder = { Text("0", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
+                                                    singleLine = true,
+                                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                                        textAlign = TextAlign.Center,
+                                                        fontWeight = FontWeight.Bold,
+                                                    ),
+                                                    shape = RoundedCornerShape(10.dp),
+                                                    colors = appFieldColors(),
+                                                    modifier = Modifier.width(64.dp),
+                                                )
+                                            }
+                                        }
+                                        if (idx < state.equipments.lastIndex) {
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(horizontal = 12.dp),
+                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
                                             )
                                         }
                                     }
-                                    if (eq.stock <= 0) {
-                                        StatusChip("Habis", StatusLate)
-                                    } else {
-                                        CounterControl(
-                                            value = qty,
-                                            suffix = "",
-                                            onMinus = { vm.setItemQuantity(eq.id, qty - 1) },
-                                            onPlus = { vm.setItemQuantity(eq.id, qty + 1) },
-                                        )
-                                    }
                                 }
                             }
-                        }
 
-                        // Ringkasan Total Paket
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                        ) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(
-                                    "Estimasi Total Paket (${state.people} Orang • ${state.days} Hari)",
-                                    style = MaterialTheme.typography.labelLarge,
-                                )
-                                Text(
-                                    formatRupiah(grandTotal),
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                if (state.people > 1 && grandTotal > 0) {
+                            // Ringkasan Biaya Ringkas
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(18.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Column {
+                                        Text(
+                                            "Estimasi (${state.people} Org • ${state.days} Hr)",
+                                            style = MaterialTheme.typography.labelMedium,
+                                        )
+                                        if (state.people > 1 && grandTotal > 0) {
+                                            Text(
+                                                "≈ ${formatRupiah(grandTotal / state.people)}/orang",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.secondary,
+                                                fontWeight = FontWeight.SemiBold,
+                                            )
+                                        }
+                                    }
                                     Text(
-                                        "≈ ${formatRupiah(grandTotal / state.people)} per orang",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.secondary,
-                                        fontWeight = FontWeight.SemiBold,
+                                        formatRupiah(grandTotal),
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.primary,
                                     )
                                 }
                             }
-                        }
 
-                        state.error?.let {
-                            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-                        }
+                            state.error?.let {
+                                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                            }
 
-                        LoadingButton(
-                            text = "Ajukan Sewa Paket Ini ($totalUnits Unit)",
-                            onClick = vm::submitPackage,
-                            loading = state.saving,
-                            enabled = selectedItems.isNotEmpty(),
-                        )
-                        Spacer(Modifier.height(16.dp))
+                            LoadingButton(
+                                text = "Ajukan Sewa Paket ($totalUnits Unit)",
+                                onClick = vm::submitPackage,
+                                loading = state.saving,
+                                enabled = selectedItems.isNotEmpty(),
+                            )
+                        }
+                        Spacer(Modifier.height(12.dp))
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun CounterControl(
-    value: Int,
-    suffix: String,
-    onMinus: () -> Unit,
-    onPlus: () -> Unit,
-) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        OutlinedButton(
-            onClick = onMinus,
-            contentPadding = PaddingValues(0.dp),
-            modifier = Modifier.size(32.dp),
-            shape = RoundedCornerShape(10.dp),
-        ) {
-            Icon(Icons.Filled.Remove, contentDescription = "Kurangi", modifier = Modifier.size(16.dp))
-        }
-        Text(
-            if (suffix.isBlank()) "$value" else "$value $suffix",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-        )
-        OutlinedButton(
-            onClick = onPlus,
-            contentPadding = PaddingValues(0.dp),
-            modifier = Modifier.size(32.dp),
-            shape = RoundedCornerShape(10.dp),
-        ) {
-            Icon(Icons.Filled.Add, contentDescription = "Tambah", modifier = Modifier.size(16.dp))
         }
     }
 }
