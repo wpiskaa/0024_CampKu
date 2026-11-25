@@ -1077,6 +1077,7 @@ fun RentalFormScreen(
     presetEquipmentId: Int,
     isAdmin: Boolean,
     onBack: () -> Unit,
+    onSaved: (Int?) -> Unit,
 ) {
     val vm = appViewModel(key = "rental_form_${id}_$presetEquipmentId") {
         RentalFormViewModel(
@@ -1085,8 +1086,9 @@ fun RentalFormScreen(
     }
     val state by vm.state.collectAsStateWithLifecycle()
     var activePickerIndex by remember { mutableStateOf<Int?>(null) }
+    var showConfirmSubmit by remember { mutableStateOf(false) }
 
-    LaunchedEffect(state.saved) { if (state.saved) onBack() }
+    LaunchedEffect(state.saved) { if (state.saved) onSaved(state.savedRentalId) }
 
     SubScreen(title = if (vm.isEdit) "Ubah Sewa" else "Pengajuan Sewa Alat", onBack = onBack) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
@@ -1423,8 +1425,102 @@ fun RentalFormScreen(
                         Spacer(Modifier.height(6.dp))
                         LoadingButton(
                             if (vm.isEdit) "Simpan Perubahan" else "Ajukan Penyewaan",
-                            onClick = vm::save,
+                            onClick = {
+                                if (vm.validateBeforeConfirm()) showConfirmSubmit = true
+                            },
                             loading = state.saving,
+                        )
+                    }
+
+                    // Dialog Konfirmasi Detail Alat Sebelum Pengajuan Disimpan
+                    if (showConfirmSubmit) {
+                        val customerName = if (isAdmin) {
+                            state.customers.firstOrNull { it.id == state.customerId }?.name
+                        } else null
+                        AlertDialog(
+                            onDismissRequest = { showConfirmSubmit = false },
+                            title = {
+                                Text(
+                                    if (vm.isEdit) "Konfirmasi Perubahan Sewa" else "Konfirmasi Pengajuan Sewa",
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            },
+                            text = {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(max = 380.dp)
+                                        .verticalScroll(rememberScrollState()),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    Text(
+                                        "Pastikan detail alat, jumlah, dan tanggal sewa berikut sudah benar:",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    customerName?.let { InfoRow("Pelanggan", it) }
+                                    InfoRow("Tanggal Sewa", formatDisplayDate(state.rentDate))
+                                    InfoRow(
+                                        "Tanggal Kembali",
+                                        formatDisplayDate(finalDueDatePreview) +
+                                            if (effectiveBonus) " (+1 hari bonus)" else "",
+                                    )
+                                    HorizontalDivider(Modifier.padding(vertical = 2.dp))
+                                    validLines.forEachIndexed { idx, (eq, qty, sub) ->
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                                            modifier = Modifier.fillMaxWidth(),
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(10.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                Column(Modifier.weight(1f)) {
+                                                    Text(
+                                                        "${idx + 1}. ${eq.name}",
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                    )
+                                                    Text(
+                                                        "$qty unit × ${baseDays ?: 1} hari × ${formatRupiah(eq.dailyPrice)}",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    )
+                                                }
+                                                Text(
+                                                    formatRupiah(sub),
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                )
+                                            }
+                                        }
+                                    }
+                                    HorizontalDivider(Modifier.padding(vertical = 2.dp))
+                                    if (discountPct > 0 && discountAmount > 0) {
+                                        InfoRow("Diskon ($discountPct%)", "-${formatRupiah(discountAmount)}", valueColor = MaterialTheme.colorScheme.secondary)
+                                    }
+                                    InfoRow(
+                                        "Total Biaya",
+                                        if (grandTotal != null) formatRupiah(grandTotal) else "-",
+                                        valueColor = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            },
+                            confirmButton = {
+                                Button(onClick = {
+                                    showConfirmSubmit = false
+                                    vm.save()
+                                }) {
+                                    Text("Ya, Ajukan")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showConfirmSubmit = false }) {
+                                    Text("Periksa Lagi")
+                                }
+                            },
                         )
                     }
 

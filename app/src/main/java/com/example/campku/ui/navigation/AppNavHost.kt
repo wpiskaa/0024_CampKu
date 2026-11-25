@@ -177,6 +177,12 @@ fun AppNavHost(sessionState: SessionState) {
                     presetEquipmentId = entry.intArg("equipmentId"),
                     isAdmin = it.isAdmin,
                     onBack = { navController.safePopBack() },
+                    onSaved = { rentalId ->
+                        navController.safePopBack()
+                        if (rentalId != null) {
+                            navController.navigate(Routes.rentalDetail(rentalId)) { launchSingleTop = true }
+                        }
+                    },
                 )
             }
         }
@@ -194,7 +200,14 @@ fun AppNavHost(sessionState: SessionState) {
                 PackagePlannerScreen(
                     isAdmin = it.isAdmin,
                     onBack = { navController.safePopBack() },
-                    onSubmitted = { navController.navigateToTab(Routes.RENTALS, it.isAdmin) },
+                    onSubmitted = { rentalId ->
+                        navController.safePopBack()
+                        if (rentalId != null) {
+                            navController.navigate(Routes.rentalDetail(rentalId)) { launchSingleTop = true }
+                        } else {
+                            navController.navigateToTab(Routes.RENTALS, it.isAdmin)
+                        }
+                    },
                 )
             }
         }

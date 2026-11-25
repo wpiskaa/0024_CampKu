@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -19,6 +20,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,12 +30,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,6 +62,7 @@ import com.example.campku.ui.components.AppTextField
 import com.example.campku.ui.components.DateField
 import com.example.campku.ui.components.DropdownField
 import com.example.campku.ui.components.ErrorState
+import com.example.campku.ui.components.InfoRow
 import com.example.campku.ui.components.LoadingButton
 import com.example.campku.ui.components.PhotoImage
 import com.example.campku.ui.components.StatusChip
@@ -88,6 +95,7 @@ data class PackagePlannerState(
     val saving: Boolean = false,
     val error: String? = null,
     val saved: Boolean = false,
+    val savedRentalId: Int? = null,
 ) {
     val people: Int get() = peopleInput.trim().toIntOrNull() ?: 0
     val days: Int get() = daysInput.trim().toIntOrNull() ?: 0
@@ -250,16 +258,15 @@ class PackagePlannerViewModel(
         }
     }
 
-    fun submitPackage() {
+    fun validateBeforeConfirm(): Boolean {
         val s = _state.value
-        if (s.saving) return
         if (s.people <= 0 || s.days <= 0) {
             _state.update { it.copy(error = "Isi jumlah orang dan durasi sewa minimal 1") }
-            return
+            return false
         }
         if (isAdmin && s.customerId == null) {
             _state.update { it.copy(error = "Silakan pilih pelanggan terlebih dahulu") }
-            return
+            return false
         }
         val selected = s.quantities.mapNotNull { (eqId, qtyStr) ->
             val q = qtyStr.toIntOrNull() ?: 0
@@ -267,12 +274,24 @@ class PackagePlannerViewModel(
         }
         if (selected.isEmpty()) {
             _state.update { it.copy(error = "Pilih minimal 1 barang dalam paket") }
-            return
+            return false
+        }
+        return true
+    }
+
+    fun submitPackage() {
+        val s = _state.value
+        if (s.saving) return
+        if (!validateBeforeConfirm()) return
+        val selected = s.quantities.mapNotNull { (eqId, qtyStr) ->
+            val q = qtyStr.toIntOrNull() ?: 0
+            if (q > 0) eqId to q else null
         }
 
         _state.update { it.copy(saving = true, error = null) }
         viewModelScope.launch {
             val custId = if (isAdmin) s.customerId else null
+            var firstId: Int? = null
             for ((eqId, qty) in selected) {
                 val req = RentalRequest(
                     customerId = custId,
@@ -286,8 +305,9 @@ class PackagePlannerViewModel(
                     _state.update { it.copy(saving = false, error = res.exceptionOrNull()?.message) }
                     return@launch
                 }
+                if (firstId == null) firstId = res.getOrNull()?.id
             }
-            _state.update { it.copy(saving = false, saved = true) }
+            _state.update { it.copy(saving = false, saved = true, savedRentalId = firstId) }
         }
     }
 }
@@ -302,15 +322,16 @@ class PackagePlannerViewModel(
 fun PackagePlannerScreen(
     isAdmin: Boolean,
     onBack: () -> Unit,
-    onSubmitted: () -> Unit,
+    onSubmitted: (Int?) -> Unit,
 ) {
     val vm = appViewModel(key = "package_planner_$isAdmin") {
         PackagePlannerViewModel(it.equipmentRepository, it.customerRepository, it.rentalRepository, isAdmin)
     }
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
+    var showConfirmSubmit by remember { mutableStateOf(false) }
 
-    LaunchedEffect(state.saved) { if (state.saved) onSubmitted() }
+    LaunchedEffect(state.saved) { if (state.saved) onSubmitted(state.savedRentalId) }
 
     SubScreen(
         title = "Paket Otomatis",
@@ -553,12 +574,73 @@ fun PackagePlannerScreen(
 
                             LoadingButton(
                                 text = "Ajukan Sewa Paket",
-                                onClick = vm::submitPackage,
+                                onClick = {
+                                    if (vm.validateBeforeConfirm()) showConfirmSubmit = true
+                                },
                                 loading = state.saving,
                                 enabled = selectedItems.isNotEmpty(),
                             )
                         }
                         Spacer(Modifier.height(12.dp))
+                    }
+
+                    if (showConfirmSubmit) {
+                        val customerName = if (isAdmin) {
+                            state.customers.firstOrNull { it.id == state.customerId }?.name
+                        } else null
+                        AlertDialog(
+                            onDismissRequest = { showConfirmSubmit = false },
+                            title = { Text("Konfirmasi Pengajuan Paket", fontWeight = FontWeight.Bold) },
+                            text = {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(max = 380.dp)
+                                        .verticalScroll(rememberScrollState()),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    Text(
+                                        "Pastikan detail alat paket dan tanggal sewa berikut sudah sesuai:",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    customerName?.let { InfoRow("Pelanggan", it) }
+                                    InfoRow("Tanggal Sewa", formatDisplayDate(state.rentDate))
+                                    InfoRow("Tanggal Kembali", "${formatDisplayDate(state.dueDate)} (${state.days} hari)")
+                                    HorizontalDivider(Modifier.padding(vertical = 2.dp))
+                                    selectedItems.forEachIndexed { idx, (eq, qty) ->
+                                        val sub = eq.dailyPrice * qty * state.days
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                                            modifier = Modifier.fillMaxWidth(),
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(10.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                Column(Modifier.weight(1f)) {
+                                                    Text("${idx + 1}. ${eq.name}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                                    Text("$qty unit × ${state.days} hari", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                }
+                                                Text(formatRupiah(sub), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+                                            }
+                                        }
+                                    }
+                                    HorizontalDivider(Modifier.padding(vertical = 2.dp))
+                                    InfoRow("Total Biaya", formatRupiah(grandTotal), valueColor = MaterialTheme.colorScheme.primary)
+                                }
+                            },
+                            confirmButton = {
+                                Button(onClick = {
+                                    showConfirmSubmit = false
+                                    vm.submitPackage()
+                                }) { Text("Ya, Ajukan") }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showConfirmSubmit = false }) { Text("Periksa Lagi") }
+                            },
+                        )
                     }
                 }
             }

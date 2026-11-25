@@ -243,6 +243,7 @@ data class RentalFormState(
     val saving: Boolean = false,
     val error: String? = null,
     val saved: Boolean = false,
+    val savedRentalId: Int? = null,
 )
 
 /**
@@ -326,10 +327,9 @@ class RentalFormViewModel(
         if (items.size <= 1) this else copy(items = items.filterIndexed { i, _ -> i != index })
     }
 
-    /** FR-13: stok cukup, tanggal kembali tidak sebelum tanggal sewa, form tidak kosong. */
-    fun save() {
+    /** FR-13: validasi seluruh input sebelum menampilkan dialog konfirmasi pengajuan. */
+    fun validateBeforeConfirm(): Boolean {
         val s = _state.value
-        if (s.saving) return
         val equipmentMap = s.equipments.associateBy { it.id }
 
         val errors = buildMap {
@@ -339,7 +339,6 @@ class RentalFormViewModel(
                 if (eq == null) put("equipment_$i", "Alat wajib dipilih")
                 Validators.positiveInt(item.quantity, "Jumlah")?.let { put("quantity_$i", it) }
             }
-            // Cek total jumlah per alat terhadap stok yang tersedia
             val totalQtyByEq = mutableMapOf<Int, Int>()
             s.items.forEachIndexed { i, item ->
                 val eqId = item.equipmentId ?: return@forEachIndexed
@@ -361,8 +360,16 @@ class RentalFormViewModel(
         }
         if (errors.isNotEmpty()) {
             _state.update { it.copy(errors = errors) }
-            return
+            return false
         }
+        return true
+    }
+
+    /** FR-13: stok cukup, tanggal kembali tidak sebelum tanggal sewa, form tidak kosong. */
+    fun save() {
+        val s = _state.value
+        if (s.saving) return
+        if (!validateBeforeConfirm()) return
 
         // Gabungkan baris yang memilih alat yang sama agar tidak duplikat
         val mergedItems = s.items
@@ -378,10 +385,11 @@ class RentalFormViewModel(
                 val (eqId, qty) = mergedItems.first()
                 val req = RentalRequest(customerId, eqId, qty, s.rentDate, s.dueDate, bonusDay = applyBonus, discountPercent = discountPct)
                 repo.update(id, req).fold(
-                    onSuccess = { _state.update { it.copy(saving = false, saved = true) } },
+                    onSuccess = { updated -> _state.update { it.copy(saving = false, saved = true, savedRentalId = updated.id) } },
                     onFailure = { e -> _state.update { it.copy(saving = false, error = e.message) } },
                 )
             } else {
+                var firstId: Int? = null
                 for ((eqId, qty) in mergedItems) {
                     val req = RentalRequest(customerId, eqId, qty, s.rentDate, s.dueDate, bonusDay = applyBonus, discountPercent = discountPct)
                     val res = repo.create(req)
@@ -389,8 +397,9 @@ class RentalFormViewModel(
                         _state.update { it.copy(saving = false, error = res.exceptionOrNull()?.message) }
                         return@launch
                     }
+                    if (firstId == null) firstId = res.getOrNull()?.id
                 }
-                _state.update { it.copy(saving = false, saved = true) }
+                _state.update { it.copy(saving = false, saved = true, savedRentalId = firstId) }
             }
         }
     }
