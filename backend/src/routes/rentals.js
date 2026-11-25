@@ -16,7 +16,7 @@ const SELECT = `SELECT r.id, r.customer_id, c.name AS customer_name, c.phone AS 
                        r.processed_by, u.name AS processed_by_name,
                        r.quantity, r.rent_date, r.due_date, r.return_date,
                        r.total_price, r.discount_percent, r.bonus_days, r.late_fee, r.status,
-                       r.pickup_photo_path, r.return_photo_path
+                       r.booking_verified, r.pickup_photo_path, r.return_photo_path
                   FROM rentals r
                   JOIN customers c ON c.id = r.customer_id
                   JOIN equipments e ON e.id = r.equipment_id
@@ -151,13 +151,16 @@ router.get('/:id', asyncHandler(async (req, res) => {
 }));
 
 // Buat penyewaan (Admin & Penyewa). Status awal selalu "dipesan".
+// Input manual oleh Admin/Kasir otomatis booking_verified = 1; pesanan Penyewa dari app = 0 (wajib verifikasi QR/Kode Booking).
 router.post('/', asyncHandler(async (req, res) => {
   const d = await parseRental(req);
-  const processedBy = req.user.role === 'admin' ? req.user.id : null;
+  const isAdmin = req.user.role === 'admin';
+  const processedBy = isAdmin ? req.user.id : null;
+  const bookingVerified = isAdmin ? 1 : 0;
   const [r] = await pool.query(
-    `INSERT INTO rentals (customer_id, equipment_id, processed_by, quantity, rent_date, due_date, total_price, discount_percent, bonus_days, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'dipesan')`,
-    [d.customerId, d.equipmentId, processedBy, d.quantity, d.rentDate, d.dueDate, d.total, d.discountPercent, d.bonusDays]
+    `INSERT INTO rentals (customer_id, equipment_id, processed_by, quantity, rent_date, due_date, total_price, discount_percent, bonus_days, status, booking_verified)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'dipesan', ?)`,
+    [d.customerId, d.equipmentId, processedBy, d.quantity, d.rentDate, d.dueDate, d.total, d.discountPercent, d.bonusDays, bookingVerified]
   );
   res.status(201).json(await findOr404(r.insertId, req.user));
 }));
@@ -196,6 +199,9 @@ router.patch('/:id/status', adminOnly, asyncHandler(async (req, res) => {
 
     if (next === 'disewa') {
       if (rental.status !== 'dipesan') throw new HttpError(400, 'Hanya penyewaan berstatus Dipesan yang dapat disewakan');
+      if (!rental.booking_verified) {
+        throw new HttpError(400, 'Wajib verifikasi QR / Kode Booking penyewa terlebih dahulu sebelum melanjutkan transaksi');
+      }
       if (!rental.pickup_photo_path) {
         throw new HttpError(400, 'Wajib mengunggah foto kondisi alat sebelum disewa terlebih dahulu');
       }
@@ -219,6 +225,35 @@ router.patch('/:id/status', adminOnly, asyncHandler(async (req, res) => {
     }
   });
 
+  res.json(await findOr404(id, req.user));
+}));
+
+// Verifikasi QR / Kode Booking oleh Kasir/Admin (memverifikasi seluruh barang penyewa pada tanggal sewa yang sama)
+router.post('/:id/verify-booking', adminOnly, asyncHandler(async (req, res) => {
+  const id = toInt(req.params.id);
+  const current = await findOr404(id, req.user);
+  const rawCode = String(req.body.booking_code || '').trim().toUpperCase();
+  if (!rawCode) {
+    throw new HttpError(400, 'Kode booking wajib dimasukkan atau dipindai melalui QR');
+  }
+
+  // Cocokkan dengan salah satu kode booking milik pelanggan tersebut pada tanggal sewa yang sama
+  const [sameDayRows] = await pool.query(
+    `${SELECT} WHERE r.customer_id = ? AND r.rent_date = ?`,
+    [current.customer_id, current.rent_date]
+  );
+  const sameDay = sameDayRows.map(decorateRental);
+  const matched = sameDay.some((r) =>
+    r.booking_code === rawCode || String(r.id) === rawCode.replace(/^#/, '').replace(/^0+/, '')
+  );
+  if (!matched) {
+    throw new HttpError(400, `Kode booking "${rawCode}" tidak cocok dengan pesanan ini`);
+  }
+
+  await pool.query(
+    'UPDATE rentals SET booking_verified = 1, processed_by = COALESCE(processed_by, ?) WHERE customer_id = ? AND rent_date = ?',
+    [req.user.id, current.customer_id, current.rent_date]
+  );
   res.json(await findOr404(id, req.user));
 }));
 

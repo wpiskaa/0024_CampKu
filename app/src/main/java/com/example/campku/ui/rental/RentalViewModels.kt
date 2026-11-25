@@ -48,6 +48,21 @@ class RentalListViewModel(private val repo: RentalRepository) : ListViewModel<Re
             )
         }
     }
+
+    /** Memverifikasi QR / Kode Booking saat kasir mengonfirmasi hasil scan sebelum membuka detail. */
+    fun verifyBookingCode(
+        rentalId: Int,
+        bookingCode: String,
+        onVerified: () -> Unit,
+        onError: (String) -> Unit,
+    ) {
+        viewModelScope.launch {
+            repo.verifyBooking(rentalId, bookingCode).fold(
+                onSuccess = { onVerified() },
+                onFailure = { onError(it.message ?: "Gagal memverifikasi kode booking") },
+            )
+        }
+    }
 }
 
 /**
@@ -166,6 +181,27 @@ class RentalDetailViewModel(
                     }
                 },
                 onFailure = { _message.value = it.message },
+            )
+            _busy.value = false
+        }
+    }
+
+    /** Verifikasi QR / Kode Booking oleh Kasir/Admin agar transaksi dari aplikasi penyewa dapat dilanjutkan. */
+    fun verifyBooking(targetId: Int, bookingCode: String, onDone: ((String?) -> Unit)? = null) {
+        if (_busy.value) return
+        viewModelScope.launch {
+            _busy.value = true
+            repo.verifyBooking(targetId, bookingCode).fold(
+                onSuccess = {
+                    load(silent = true)
+                    _message.value = "Kode booking berhasil diverifikasi! Transaksi siap dilanjutkan."
+                    onDone?.invoke(null)
+                },
+                onFailure = { e ->
+                    val err = e.message ?: "Kode booking tidak cocok"
+                    _message.value = err
+                    onDone?.invoke(err)
+                },
             )
             _busy.value = false
         }

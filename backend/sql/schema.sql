@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS rentals (
   bonus_days        INT UNSIGNED NOT NULL DEFAULT 0,
   late_fee          INT UNSIGNED NOT NULL DEFAULT 0,
   status            ENUM('dipesan','disewa','dikembalikan') NOT NULL DEFAULT 'dipesan',
+  booking_verified  TINYINT(1) NOT NULL DEFAULT 0,
   pickup_photo_path VARCHAR(255) NULL,
   return_photo_path VARCHAR(255) NULL,
   created_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

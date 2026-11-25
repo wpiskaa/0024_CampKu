@@ -142,6 +142,7 @@ data class Rental(
     @SerializedName("is_late") val isLate: Boolean = false,
     @SerializedName("late_days") val lateDays: Int = 0,
     @SerializedName("booking_code") val bookingCode: String = "",
+    @SerializedName("booking_verified") val bookingVerified: Boolean = false,
 ) {
     val displayBookingCode: String
         get() = bookingCode.ifBlank { "CK-${rentDate.replace("-", "")}-${id.toString().padStart(4, '0')}" }
@@ -160,6 +161,8 @@ data class RentalRequest(
 data class StatusRequest(val status: String)
 
 data class DiscountRequest(@SerializedName("discount_percent") val discountPercent: Int)
+
+data class VerifyBookingRequest(@SerializedName("booking_code") val bookingCode: String)
 
 // ---------- Pengguna ----------
 

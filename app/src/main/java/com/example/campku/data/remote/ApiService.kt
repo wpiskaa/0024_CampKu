@@ -20,6 +20,7 @@ import com.example.campku.data.model.RevenueReport
 import com.example.campku.data.model.StatusRequest
 import com.example.campku.data.model.User
 import com.example.campku.data.model.UserRequest
+import com.example.campku.data.model.VerifyBookingRequest
 import okhttp3.MultipartBody
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -136,6 +137,9 @@ interface ApiService {
 
     @POST("api/rentals/{id}/discount")
     suspend fun applyDiscount(@Path("id") id: Int, @Body body: DiscountRequest): Rental
+
+    @POST("api/rentals/{id}/verify-booking")
+    suspend fun verifyBooking(@Path("id") id: Int, @Body body: VerifyBookingRequest): Rental
 
     @Multipart
     @POST("api/rentals/{id}/pickup-photo")

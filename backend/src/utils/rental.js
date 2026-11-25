@@ -87,6 +87,7 @@ function decorateRental(row) {
   const today = todayStr();
   const out = { ...row };
   out.booking_code = formatBookingCode(row.rent_date, row.id);
+  out.booking_verified = Boolean(row.booking_verified);
   out.days = rentalDays(row.rent_date, row.due_date);
   out.bonus_days = Number(row.bonus_days || 0);
   out.discount_percent = Number(row.discount_percent || 0);

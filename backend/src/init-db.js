@@ -35,6 +35,12 @@ async function main() {
   if (!bonusCols.length) {
     await conn.query('ALTER TABLE rentals ADD COLUMN bonus_days INT NOT NULL DEFAULT 0 AFTER discount_percent');
   }
+  const [verCols] = await conn.query("SHOW COLUMNS FROM rentals LIKE 'booking_verified'");
+  if (!verCols.length) {
+    await conn.query('ALTER TABLE rentals ADD COLUMN booking_verified TINYINT(1) NOT NULL DEFAULT 0 AFTER status');
+    // Data lama yang sudah diproses admin (processed_by IS NOT NULL atau sudah disewa/dikembalikan) dianggap sudah terverifikasi
+    await conn.query("UPDATE rentals SET booking_verified = 1 WHERE processed_by IS NOT NULL OR status <> 'dipesan'");
+  }
   console.log(`Skema database "${dbName}" siap.`);
 
   const adminEmail = (process.env.ADMIN_EMAIL || 'admin@campku.com').toLowerCase();

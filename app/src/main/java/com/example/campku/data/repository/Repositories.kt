@@ -20,6 +20,7 @@ import com.example.campku.data.model.RevenueReport
 import com.example.campku.data.model.StatusRequest
 import com.example.campku.data.model.User
 import com.example.campku.data.model.UserRequest
+import com.example.campku.data.model.VerifyBookingRequest
 import com.example.campku.data.remote.ApiService
 import com.google.gson.Gson
 import com.google.gson.JsonParser
@@ -153,6 +154,7 @@ class RentalRepository(private val api: ApiService, private val photos: PhotoSto
     suspend fun changeStatus(id: Int, status: String) = apiCall { api.updateRentalStatus(id, StatusRequest(status)) }
     suspend fun applyBonusDay(id: Int) = apiCall { api.applyBonusDay(id) }
     suspend fun applyDiscount(id: Int, discountPercent: Int) = apiCall { api.applyDiscount(id, DiscountRequest(discountPercent)) }
+    suspend fun verifyBooking(id: Int, bookingCode: String) = apiCall { api.verifyBooking(id, VerifyBookingRequest(bookingCode.trim())) }
 
     suspend fun delete(id: Int) = apiCall {
         api.deleteRental(id)

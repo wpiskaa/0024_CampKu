@@ -325,8 +325,24 @@ fun RentalListScreen(navController: NavHostController, isAdmin: Boolean) {
             primary = primary,
             items = itemsList,
             onConfirm = {
-                scannedBundle = null
-                navController.navigate(Routes.rentalDetail(primary.id)) { launchSingleTop = true }
+                val needsVerify = itemsList.any { it.status == RentalStatus.DIPESAN && !it.bookingVerified }
+                if (needsVerify) {
+                    vm.verifyBookingCode(
+                        rentalId = primary.id,
+                        bookingCode = primary.displayBookingCode,
+                        onVerified = {
+                            scannedBundle = null
+                            navController.navigate(Routes.rentalDetail(primary.id)) { launchSingleTop = true }
+                        },
+                        onError = { err ->
+                            scannedBundle = null
+                            scanError = err
+                        },
+                    )
+                } else {
+                    scannedBundle = null
+                    navController.navigate(Routes.rentalDetail(primary.id)) { launchSingleTop = true }
+                }
             },
             onDismiss = { scannedBundle = null },
         )
@@ -657,6 +673,28 @@ fun RentalDetailScreen(
     var discountTarget by remember { mutableStateOf<Rental?>(null) }
     var receiptBundle by remember { mutableStateOf<Pair<Rental, List<Rental>>?>(null) }
     var selectedDate by remember { mutableStateOf<String?>(null) }
+    var verifyTarget by remember { mutableStateOf<Rental?>(null) }
+
+    val detailQrScanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
+        val raw = result.contents?.trim()
+        val target = verifyTarget
+        if (!raw.isNullOrBlank() && target != null) {
+            vm.verifyBooking(target.id, raw)
+            verifyTarget = null
+        }
+    }
+
+    fun startDetailQrScan(target: Rental) {
+        verifyTarget = target
+        val options = ScanOptions().apply {
+            setCaptureActivity(PortraitCaptureActivity::class.java)
+            setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+            setPrompt("Scan QR Booking Pass penyewa untuk verifikasi")
+            setBeepEnabled(true)
+            setOrientationLocked(true)
+        }
+        detailQrScanLauncher.launch(options)
+    }
 
     OnResume { vm.load() }
     MessageEffect(message, snackbar, vm::consumeMessage)
@@ -827,10 +865,66 @@ fun RentalDetailScreen(
                     val currentGroup = dateGroups.firstOrNull { it.first == activeDate } ?: dateGroups.first()
                     val (rentDate, rentalsOnDate) = currentGroup
                     val groupPrimary = rentalsOnDate.first()
+                    val needsVerification = isAdmin && rentalsOnDate.any { it.status == RentalStatus.DIPESAN && !it.bookingVerified }
+
                     DateRentalSectionHeader(
                         rentDate = rentDate,
                         rentals = rentalsOnDate,
                     )
+
+                    if (needsVerification) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = StatusOrdered.copy(alpha = 0.14f)),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, StatusOrdered.copy(alpha = 0.45f)),
+                        ) {
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Filled.QrCodeScanner, contentDescription = null, tint = StatusOrdered)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        "Wajib Verifikasi QR / Kode Booking",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = StatusOrdered,
+                                    )
+                                }
+                                Text(
+                                    "Pesanan ini dibuat dari aplikasi penyewa. Scan QR Booking Pass atau masukkan Kode Booking untuk memverifikasi sebelum melanjutkan transaksi.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                Button(
+                                    onClick = { verifyTarget = groupPrimary },
+                                    modifier = Modifier.fillMaxWidth().height(46.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                ) {
+                                    Icon(Icons.Filled.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Verifikasi QR / Kode Booking")
+                                }
+                            }
+                        }
+                    } else if (isAdmin && rentalsOnDate.any { it.status == RentalStatus.DIPESAN }) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = StatusReturned.copy(alpha = 0.12f),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.CheckCircle, null, tint = StatusReturned, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    "Pesanan terverifikasi • Siap dokumentasi foto & mulai sewa",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = StatusReturned,
+                                )
+                            }
+                        }
+                    }
+
                     BookingPassCard(
                         primary = groupPrimary,
                         items = rentalsOnDate,
@@ -875,6 +969,24 @@ fun RentalDetailScreen(
             primary = groupPrimary,
             items = groupItems,
             onDismiss = { receiptBundle = null },
+        )
+    }
+
+    verifyTarget?.let { target ->
+        BookingCodeLookupDialog(
+            onScanCamera = {
+                startDetailQrScan(target)
+            },
+            onVerify = { code, onErr ->
+                vm.verifyBooking(target.id, code) { err ->
+                    if (err == null) {
+                        verifyTarget = null
+                    } else {
+                        onErr(err)
+                    }
+                }
+            },
+            onDismiss = { verifyTarget = null },
         )
     }
 
@@ -1090,7 +1202,7 @@ private fun RentalEquipmentDetailCard(
                     )
                 }
                 if (isAdmin && r.status == RentalStatus.DIPESAN) {
-                    PhotoPickerButtons(onPicked = onUploadPickupPhoto, enabled = !busy)
+                    PhotoPickerButtons(onPicked = onUploadPickupPhoto, enabled = !busy && r.bookingVerified)
                 }
             }
 
@@ -1125,7 +1237,13 @@ private fun RentalEquipmentDetailCard(
             if (isAdmin) {
                 when (r.status) {
                     RentalStatus.DIPESAN -> {
-                        if (!hasPickupPhoto) {
+                        if (!r.bookingVerified) {
+                            Text(
+                                "Wajib verifikasi QR / Kode Booking penyewa terlebih dahulu untuk melanjutkan transaksi.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        } else if (!hasPickupPhoto) {
                             Text(
                                 "Ambil/unggah foto kondisi sebelum disewa terlebih dahulu untuk mengaktifkan tombol Mulai Sewa.",
                                 style = MaterialTheme.typography.bodySmall,
@@ -1136,7 +1254,7 @@ private fun RentalEquipmentDetailCard(
                             "Mulai Sewa ${r.equipmentName}",
                             onClick = { onConfirmStatus(RentalStatus.DISEWA) },
                             loading = busy,
-                            enabled = hasPickupPhoto,
+                            enabled = r.bookingVerified && hasPickupPhoto,
                         )
                     }
                     RentalStatus.DISEWA -> {
