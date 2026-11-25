@@ -82,6 +82,7 @@ object Routes {
     const val USER_FORM = "user_form/{id}"
 
     const val PROFILE = "profile"
+    const val SETTINGS = "settings"
 
     fun home(isAdmin: Boolean) = if (isAdmin) HOME_ADMIN else HOME_USER
 

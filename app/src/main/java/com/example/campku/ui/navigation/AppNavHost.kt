@@ -28,6 +28,7 @@ import com.example.campku.ui.equipment.EquipmentDetailScreen
 import com.example.campku.ui.equipment.EquipmentFormScreen
 import com.example.campku.ui.equipment.EquipmentListScreen
 import com.example.campku.ui.home.HomeScreen
+import com.example.campku.ui.profile.AccountSettingsScreen
 import com.example.campku.ui.profile.ProfileScreen
 import com.example.campku.ui.rental.RentalDetailScreen
 import com.example.campku.ui.rental.RentalFormScreen
@@ -102,6 +103,7 @@ fun AppNavHost(sessionState: SessionState) {
         composable(Routes.HOME_ADMIN) { user?.let { HomeScreen(navController, it) } }
         composable(Routes.HOME_USER) { user?.let { HomeScreen(navController, it) } }
         composable(Routes.PROFILE) { user?.let { ProfileScreen(navController, it) } }
+        composable(Routes.SETTINGS) { user?.let { AccountSettingsScreen(navController, it) } }
 
         // Alat
         composable(Routes.EQUIPMENTS) { user?.let { EquipmentListScreen(navController, it.isAdmin) } }

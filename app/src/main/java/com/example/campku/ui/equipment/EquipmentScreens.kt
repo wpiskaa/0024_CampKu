@@ -1,29 +1,35 @@
 package com.example.campku.ui.equipment
 
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
@@ -31,6 +37,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,12 +48,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.example.campku.appViewModel
@@ -79,49 +90,181 @@ fun StockChip(stock: Int, modifier: Modifier = Modifier) {
     if (stock > 0) StatusChip("Stok $stock", StatusReturned, modifier) else StatusChip("Habis", StatusLate, modifier)
 }
 
-/** Kartu alat dipakai di daftar alat dan alat populer (Beranda). */
+/** Kartu alat bergaya glossy untuk tampilan grid 3 kolom per baris. */
 @Composable
-fun EquipmentCard(
+fun EquipmentGridCard(
     equipment: Equipment,
+    isAdmin: Boolean,
     onClick: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
     modifier: Modifier = Modifier,
-    trailing: @Composable () -> Unit = {},
 ) {
-    ListCard(onClick = onClick, modifier = modifier) {
-        PhotoImage(
-            kind = PhotoStorage.KIND_EQUIPMENT,
-            id = equipment.id,
-            serverPath = equipment.photoPath,
+    val cardShape = RoundedCornerShape(18.dp)
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val glossyBg = Brush.verticalGradient(
+        colors = listOf(
+            surfaceColor,
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.20f),
+            surfaceColor,
+        ),
+    )
+    val glossyBorder = Brush.linearGradient(
+        colors = listOf(
+            Color.White.copy(alpha = 0.95f),
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.85f),
+            primaryColor.copy(alpha = 0.28f),
+        ),
+    )
+
+    Surface(
+        onClick = onClick,
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 6.dp,
+                shape = cardShape,
+                ambientColor = primaryColor.copy(alpha = 0.18f),
+                spotColor = primaryColor.copy(alpha = 0.22f),
+            ),
+        shape = cardShape,
+        color = surfaceColor,
+        border = BorderStroke(1.2.dp, glossyBorder),
+    ) {
+        Column(
             modifier = Modifier
-                .size(72.dp)
-                .clip(RoundedCornerShape(12.dp)),
-        )
-        Column(Modifier.weight(1f).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                equipment.name,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                equipment.categoryName.orEmpty(),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                "${formatRupiah(equipment.dailyPrice)} / hari",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Medium,
-            )
-            StockChip(equipment.stock)
+                .fillMaxWidth()
+                .background(glossyBg),
+        ) {
+            // Area Foto + Efek Kilap Glossy + Badge Stok
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1.05f)
+                    .padding(6.dp)
+                    .clip(RoundedCornerShape(13.dp)),
+            ) {
+                PhotoImage(
+                    kind = PhotoStorage.KIND_EQUIPMENT,
+                    id = equipment.id,
+                    serverPath = equipment.photoPath,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+                // Efek kilap glossy di bagian atas foto
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(34.dp)
+                        .align(Alignment.TopCenter)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.36f),
+                                    Color.White.copy(alpha = 0.08f),
+                                    Color.Transparent,
+                                ),
+                            ),
+                        ),
+                )
+                // Badge stok kecil glossy di pojok kiri atas
+                val inStock = equipment.stock > 0
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(5.dp),
+                    shape = RoundedCornerShape(50),
+                    color = (if (inStock) StatusReturned else StatusLate).copy(alpha = 0.88f),
+                    border = BorderStroke(0.8.dp, Color.White.copy(alpha = 0.65f)),
+                ) {
+                    Text(
+                        text = if (inStock) "Stok ${equipment.stock}" else "Habis",
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        color = Color.White,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                }
+            }
+
+            // Detail Nama, Harga, & Tombol Aksi Ringkas Admin
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 8.dp, end = 8.dp, top = 2.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = equipment.name,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontSize = 11.5.sp,
+                    lineHeight = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    minLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = "${formatRupiah(equipment.dailyPrice)}/hr",
+                    fontSize = 10.5.sp,
+                    color = primaryColor,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (isAdmin) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(26.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable(onClick = onEdit),
+                            shape = RoundedCornerShape(8.dp),
+                            color = primaryColor.copy(alpha = 0.12f),
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Filled.Edit,
+                                    contentDescription = "Ubah",
+                                    tint = primaryColor,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                            }
+                        }
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(26.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable(onClick = onDelete),
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Filled.Delete,
+                                    contentDescription = "Hapus",
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
-        trailing()
     }
 }
 
-/** Daftar Alat (cari + filter kategori). */
+/** Daftar Alat (cari + filter kategori) dalam tampilan grid 3 kotak per baris bergaya glossy. */
 @Composable
 fun EquipmentListScreen(navController: NavHostController, isAdmin: Boolean) {
     val vm = appViewModel { EquipmentListViewModel(it.equipmentRepository, it.categoryRepository) }
@@ -143,7 +286,10 @@ fun EquipmentListScreen(navController: NavHostController, isAdmin: Boolean) {
         snackbarHostState = snackbar,
         floatingActionButton = {
             if (isAdmin) {
-                FloatingActionButton(onClick = { navController.navigate(Routes.equipmentForm()) }) {
+                FloatingActionButton(
+                    onClick = { navController.navigate(Routes.equipmentForm()) },
+                    shape = CircleShape,
+                ) {
                     Icon(Icons.Filled.Add, "Tambah alat")
                 }
             }
@@ -175,23 +321,20 @@ fun EquipmentListScreen(navController: NavHostController, isAdmin: Boolean) {
                 if (list.isEmpty()) {
                     EmptyState(if (search.isBlank() && filter == null) "Belum ada alat" else "Alat tidak ditemukan")
                 } else {
-                    LazyColumn(
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 88.dp),
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 92.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         items(list, key = { it.id }) { e ->
-                            EquipmentCard(e, onClick = { navController.navigate(Routes.equipmentDetail(e.id)) }) {
-                                if (isAdmin) {
-                                    Column {
-                                        IconButton(onClick = { navController.navigate(Routes.equipmentForm(e.id)) }) {
-                                            Icon(Icons.Filled.Edit, "Ubah", tint = MaterialTheme.colorScheme.primary)
-                                        }
-                                        IconButton(onClick = { deleteTarget = e }) {
-                                            Icon(Icons.Filled.Delete, "Hapus", tint = MaterialTheme.colorScheme.error)
-                                        }
-                                    }
-                                }
-                            }
+                            EquipmentGridCard(
+                                equipment = e,
+                                isAdmin = isAdmin,
+                                onClick = { navController.navigate(Routes.equipmentDetail(e.id)) },
+                                onEdit = { navController.navigate(Routes.equipmentForm(e.id)) },
+                                onDelete = { deleteTarget = e },
+                            )
                         }
                     }
                 }
