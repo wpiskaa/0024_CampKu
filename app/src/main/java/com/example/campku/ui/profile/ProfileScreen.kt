@@ -574,7 +574,7 @@ private fun ProfileInfoDialog(modal: ProfileInfoModal, onDismiss: () -> Unit) {
         ProfileInfoModal.TERMS -> "Syarat & Ketentuan Sewa" to """
             • Penyewa wajib melampirkan identitas asli (KTP / SIM / KTM) yang masih berlaku sebagai jaminan.
             • Kondisi alat wajib didokumentasikan dengan foto sebelum disewa dan saat dikembalikan.
-            • Keterlambatan pengembalian dikenakan denda otomatis sebesar 10% dari harga sewa harian per hari terlambat.
+            • Keterlambatan pengembalian dihitung sebagai tambahan biaya sewa 1 hari penuh per hari terlambat.
             • Kerusakan atau kehilangan komponen alat menjadi tanggung jawab penyewa sesuai kesepakatan basecamp.
         """.trimIndent()
 

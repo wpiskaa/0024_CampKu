@@ -18,11 +18,11 @@ test('FR-09: total = hari x harga x jumlah', () => {
   assert.strictEqual(calcTotal('2026-01-01', '2026-01-04', 50000, 2), 300000);
 });
 
-test('FR-11: denda per hari = 10% harga sewa per hari', () => {
+test('FR-11: denda keterlambatan = dihitung sewa 1 hari penuh per hari terlambat', () => {
   assert.strictEqual(calcLateFee('2026-01-04', '2026-01-04', 50000, 1), 0); // tepat waktu
   assert.strictEqual(calcLateFee('2026-01-04', '2026-01-03', 50000, 1), 0); // lebih awal
-  assert.strictEqual(calcLateFee('2026-01-04', '2026-01-07', 50000, 1), 15000); // 3 hari x 5.000
-  assert.strictEqual(calcLateFee('2026-01-04', '2026-01-06', 50000, 2), 10000 * 2); // x jumlah alat
+  assert.strictEqual(calcLateFee('2026-01-04', '2026-01-07', 50000, 1), 150000); // 3 hari x 50.000
+  assert.strictEqual(calcLateFee('2026-01-04', '2026-01-06', 50000, 2), 100000 * 2); // 2 hari x 50.000 x 2 unit
 });
 
 test('lateDays tidak negatif', () => {

@@ -74,6 +74,7 @@ import com.example.campku.ui.components.MessageEffect
 import com.example.campku.ui.components.OnResume
 import com.example.campku.ui.components.PhotoImage
 import com.example.campku.ui.components.PhotoPickerButtons
+import com.example.campku.ui.components.RupiahVisualTransformation
 import com.example.campku.ui.components.SearchField
 import com.example.campku.ui.components.SectionTitle
 import com.example.campku.ui.components.StateContent
@@ -490,9 +491,15 @@ fun EquipmentFormScreen(id: Int, onBack: () -> Unit) {
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
+                    val rupiahTransform = remember { RupiahVisualTransformation() }
                     AppTextField(
-                        state.price, { vm.update { copy(price = it.filter(Char::isDigit)) } }, "Harga sewa per hari (Rp)",
-                        error = state.errors["price"], keyboardType = KeyboardType.Number,
+                        state.price,
+                        { vm.update { copy(price = it.filter(Char::isDigit).take(9)) } },
+                        "Harga sewa per hari",
+                        error = state.errors["price"],
+                        keyboardType = KeyboardType.Number,
+                        prefixText = "Rp ",
+                        visualTransformation = rupiahTransform,
                     )
                     AppTextField(
                         state.stock, { vm.update { copy(stock = it.filter(Char::isDigit)) } }, "Stok",

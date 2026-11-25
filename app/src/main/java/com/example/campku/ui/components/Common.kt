@@ -59,9 +59,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -227,6 +230,44 @@ fun appFieldColors() = OutlinedTextFieldDefaults.colors(
     unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
 )
 
+/** Memformat tampilan angka input nominal Rupiah dengan pemisah ribuan titik (mis. 60000 -> 60.000). */
+class RupiahVisualTransformation : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val raw = text.text
+        if (raw.isEmpty()) return TransformedText(AnnotatedString(""), OffsetMapping.Identity)
+        val formatted = buildString {
+            val len = raw.length
+            for (i in 0 until len) {
+                append(raw[i])
+                val remaining = len - 1 - i
+                if (remaining > 0 && remaining % 3 == 0) append('.')
+            }
+        }
+        val offsetMapping = object : OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int {
+                val clamped = offset.coerceIn(0, raw.length)
+                var dotsBefore = 0
+                val len = raw.length
+                for (i in 0 until clamped) {
+                    val remaining = len - 1 - i
+                    if (remaining > 0 && remaining % 3 == 0 && i < clamped) dotsBefore++
+                }
+                return (clamped + dotsBefore).coerceIn(0, formatted.length)
+            }
+
+            override fun transformedToOriginal(offset: Int): Int {
+                val clamped = offset.coerceIn(0, formatted.length)
+                var digits = 0
+                for (i in 0 until clamped) {
+                    if (formatted[i] != '.') digits++
+                }
+                return digits.coerceIn(0, raw.length)
+            }
+        }
+        return TransformedText(AnnotatedString(formatted), offsetMapping)
+    }
+}
+
 @Composable
 fun AppTextField(
     value: String,
@@ -239,17 +280,25 @@ fun AppTextField(
     minLines: Int = 1,
     isPassword: Boolean = false,
     enabled: Boolean = true,
+    prefixText: String? = null,
+    visualTransformation: VisualTransformation? = null,
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
+    val effectiveTransformation = when {
+        isPassword && !passwordVisible -> PasswordVisualTransformation()
+        visualTransformation != null -> visualTransformation
+        else -> VisualTransformation.None
+    }
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier.fillMaxWidth(),
         label = { Text(label) },
+        prefix = prefixText?.let { { Text(it, fontWeight = FontWeight.SemiBold) } },
         isError = error != null,
         supportingText = error?.let { { Text(it) } },
         keyboardOptions = KeyboardOptions(keyboardType = if (isPassword) KeyboardType.Password else keyboardType),
-        visualTransformation = if (isPassword && !passwordVisible) PasswordVisualTransformation() else VisualTransformation.None,
+        visualTransformation = effectiveTransformation,
         trailingIcon = if (isPassword) {
             {
                 IconButton(onClick = { passwordVisible = !passwordVisible }) {

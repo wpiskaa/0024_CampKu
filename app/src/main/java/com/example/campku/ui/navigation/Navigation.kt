@@ -300,7 +300,7 @@ private fun AppBottomBar(navController: NavHostController, isAdmin: Boolean) {
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                centerTab.icon,
+                painter = painterResource(id = R.drawable.ic_tent),
                 contentDescription = centerTab.label,
                 tint = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.size(26.dp),

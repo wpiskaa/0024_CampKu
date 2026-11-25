@@ -1,7 +1,7 @@
 const { HttpError } = require('./http');
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-const LATE_FEE_RATE = 0.1; // FR-11: denda per hari = 10% harga sewa per hari
+const LATE_FEE_RATE = 1.0; // Denda keterlambatan: dihitung 1 hari sewa penuh per hari terlambat
 
 /** Tanggal hari ini (zona waktu server) dalam format YYYY-MM-DD. */
 function todayStr() {

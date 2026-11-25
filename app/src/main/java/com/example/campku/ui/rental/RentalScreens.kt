@@ -1101,7 +1101,7 @@ fun RentalFormScreen(
                                     }
                                 }
                                 Text(
-                                    "Denda keterlambatan: 10% dari harga sewa per hari.",
+                                    "Denda keterlambatan: dihitung 1 hari sewa penuh per hari terlambat.",
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                             }
