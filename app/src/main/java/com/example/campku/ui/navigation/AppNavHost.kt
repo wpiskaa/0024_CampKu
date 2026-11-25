@@ -1,5 +1,8 @@
 package com.example.campku.ui.navigation
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
@@ -80,21 +83,28 @@ fun AppNavHost(sessionState: SessionState) {
         }
     }
 
-    NavHost(navController = navController, startDestination = startDestination) {
+    NavHost(
+        navController = navController,
+        startDestination = startDestination,
+        enterTransition = { fadeIn(animationSpec = tween(180)) },
+        exitTransition = { fadeOut(animationSpec = tween(140)) },
+        popEnterTransition = { fadeIn(animationSpec = tween(180)) },
+        popExitTransition = { fadeOut(animationSpec = tween(140)) },
+    ) {
         composable(Routes.LOGIN) { entry ->
             val info by entry.savedStateHandle.getStateFlow<String?>("info", null).collectAsStateWithLifecycle()
             LoginScreen(
-                onNavigateRegister = { navController.navigate(Routes.REGISTER) },
+                onNavigateRegister = { navController.navigate(Routes.REGISTER) { launchSingleTop = true } },
                 infoMessage = info,
                 onInfoShown = { entry.savedStateHandle["info"] = null },
             )
         }
         composable(Routes.REGISTER) {
             RegisterScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { navController.safePopBack() },
                 onRegistered = { message ->
                     navController.previousBackStackEntry?.savedStateHandle?.set("info", message)
-                    navController.popBackStack()
+                    navController.safePopBack()
                 },
             )
         }
@@ -113,26 +123,26 @@ fun AppNavHost(sessionState: SessionState) {
                 EquipmentDetailScreen(
                     id = id,
                     isAdmin = it.isAdmin,
-                    onBack = { navController.popBackStack() },
-                    onEdit = { navController.navigate(Routes.equipmentForm(id)) },
-                    onRent = { navController.navigate(Routes.rentalForm(equipmentId = id)) },
+                    onBack = { navController.safePopBack() },
+                    onEdit = { navController.navigate(Routes.equipmentForm(id)) { launchSingleTop = true } },
+                    onRent = { navController.navigate(Routes.rentalForm(equipmentId = id)) { launchSingleTop = true } },
                 )
             }
         }
         composable(Routes.EQUIPMENT_FORM, idArg) { entry ->
-            if (user?.isAdmin == true) EquipmentFormScreen(entry.intArg("id")) { navController.popBackStack() }
+            if (user?.isAdmin == true) EquipmentFormScreen(entry.intArg("id")) { navController.safePopBack() }
         }
 
-        // Kategori (Admin)
+        // Kategori (tab untuk Penyewa; layar penuh dengan tombol Kembali untuk Admin)
         composable(Routes.CATEGORIES) { user?.let { CategoryListScreen(navController, it.isAdmin) } }
         composable(Routes.CATEGORY_FORM, idArg) { entry ->
-            if (user?.isAdmin == true) CategoryFormScreen(entry.intArg("id")) { navController.popBackStack() }
+            if (user?.isAdmin == true) CategoryFormScreen(entry.intArg("id")) { navController.safePopBack() }
         }
 
         // Pelanggan (Admin)
         composable(Routes.CUSTOMERS) { user?.let { CustomerListScreen(navController, it.isAdmin) } }
         composable(Routes.CUSTOMER_FORM, idArg) { entry ->
-            if (user?.isAdmin == true) CustomerFormScreen(entry.intArg("id")) { navController.popBackStack() }
+            if (user?.isAdmin == true) CustomerFormScreen(entry.intArg("id")) { navController.safePopBack() }
         }
 
         // Penyewaan
@@ -143,8 +153,8 @@ fun AppNavHost(sessionState: SessionState) {
                 RentalDetailScreen(
                     id = id,
                     isAdmin = it.isAdmin,
-                    onBack = { navController.popBackStack() },
-                    onEdit = { targetId -> navController.navigate(Routes.rentalForm(targetId)) },
+                    onBack = { navController.safePopBack() },
+                    onEdit = { targetId -> navController.navigate(Routes.rentalForm(targetId)) { launchSingleTop = true } },
                 )
             }
         }
@@ -163,7 +173,7 @@ fun AppNavHost(sessionState: SessionState) {
                     id = entry.intArg("id"),
                     presetEquipmentId = entry.intArg("equipmentId"),
                     isAdmin = it.isAdmin,
-                    onBack = { navController.popBackStack() },
+                    onBack = { navController.safePopBack() },
                 )
             }
         }
@@ -171,7 +181,7 @@ fun AppNavHost(sessionState: SessionState) {
         // Pengguna (Admin)
         composable(Routes.USERS) { if (user?.isAdmin == true) UserListScreen(navController, user) }
         composable(Routes.USER_FORM, idArg) { entry ->
-            if (user?.isAdmin == true) UserFormScreen(entry.intArg("id"), user) { navController.popBackStack() }
+            if (user?.isAdmin == true) UserFormScreen(entry.intArg("id"), user) { navController.safePopBack() }
         }
     }
 }

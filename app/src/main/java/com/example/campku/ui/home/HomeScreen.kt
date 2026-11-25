@@ -83,13 +83,13 @@ fun HomeScreen(navController: NavHostController, user: User) {
                     Spacer(Modifier.height(4.dp))
                     LoadingButton(
                         text = "Buat Penyewaan Baru",
-                        onClick = { navController.navigate(Routes.rentalForm()) },
+                        onClick = { navController.navigate(Routes.rentalForm()) { launchSingleTop = true } },
                         loading = false,
                     )
                     if (isAdmin) {
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             OutlinedButton(
-                                onClick = { navController.navigate(Routes.CATEGORIES) },
+                                onClick = { navController.navigate(Routes.CATEGORIES) { launchSingleTop = true } },
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(14.dp),
                             ) {
@@ -98,7 +98,7 @@ fun HomeScreen(navController: NavHostController, user: User) {
                                 Text("Kategori")
                             }
                             OutlinedButton(
-                                onClick = { navController.navigate(Routes.USERS) },
+                                onClick = { navController.navigate(Routes.USERS) { launchSingleTop = true } },
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(14.dp),
                             ) {

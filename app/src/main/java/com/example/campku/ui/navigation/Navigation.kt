@@ -95,6 +95,39 @@ object Routes {
     fun userForm(id: Int = 0) = "user_form/$id"
 }
 
+/**
+ * Navigasi tab yang bersih dan konsisten:
+ * - Menuju Beranda selalu mengosongkan tumpukan di atas Beranda agar kembali ke tampilan awal.
+ * - Menuju tab lain selalu membersihkan tumpukan tab sebelumnya (tanpa saveState/restoreState)
+ *   sehingga setiap tab dibuka dari tampilan awal dan tombol Kembali selalu mengarah ke Beranda.
+ */
+fun NavHostController.navigateToTab(route: String, isAdmin: Boolean) {
+    val homeRoute = Routes.home(isAdmin)
+    if (route == homeRoute) {
+        val popped = popBackStack(homeRoute, inclusive = false)
+        if (!popped) {
+            navigate(homeRoute) {
+                popUpTo(graph.id) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+        return
+    }
+    navigate(route) {
+        popUpTo(homeRoute) {
+            inclusive = false
+            saveState = false
+        }
+        launchSingleTop = true
+        restoreState = false
+    }
+}
+
+/** Kembali dengan aman agar tap ganda pada tombol Back tidak pernah mengosongkan layar utama. */
+fun NavHostController.safePopBack() {
+    if (previousBackStackEntry != null) popBackStack()
+}
+
 private data class Tab(
     val route: String,
     val label: String,
@@ -191,16 +224,11 @@ private fun AppBottomBar(navController: NavHostController, isAdmin: Boolean) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val tabs = if (isAdmin) adminTabs else userTabs
-    val homeRoute = Routes.home(isAdmin)
     val primary = MaterialTheme.colorScheme.primary
 
     fun go(route: String) {
         if (currentRoute != route) {
-            navController.navigate(route) {
-                popUpTo(homeRoute) { saveState = true }
-                launchSingleTop = true
-                restoreState = true
-            }
+            navController.navigateToTab(route, isAdmin)
         }
     }
 

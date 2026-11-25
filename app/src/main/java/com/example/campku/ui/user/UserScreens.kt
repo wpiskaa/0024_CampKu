@@ -54,8 +54,8 @@ import com.example.campku.ui.components.SearchField
 import com.example.campku.ui.components.StateContent
 import com.example.campku.ui.components.StatusChip
 import com.example.campku.ui.components.SubScreen
-import com.example.campku.ui.navigation.MainScreen
 import com.example.campku.ui.navigation.Routes
+import com.example.campku.ui.navigation.safePopBack
 
 private val roleOptions = listOf(0 to "Penyewa", 1 to "Admin")
 private fun roleToId(role: String) = if (role == Role.ADMIN) 1 else 0
@@ -73,13 +73,12 @@ fun UserListScreen(navController: NavHostController, currentUser: User) {
     OnResume(vm::refresh)
     MessageEffect(message, snackbar, vm::consumeMessage)
 
-    MainScreen(
-        navController = navController,
-        isAdmin = true,
+    SubScreen(
         title = "Pengguna",
+        onBack = { navController.safePopBack() },
         snackbarHostState = snackbar,
         floatingActionButton = {
-            FloatingActionButton(onClick = { navController.navigate(Routes.userForm()) }) {
+            FloatingActionButton(onClick = { navController.navigate(Routes.userForm()) { launchSingleTop = true } }) {
                 Icon(Icons.Filled.Add, "Tambah pengguna")
             }
         },

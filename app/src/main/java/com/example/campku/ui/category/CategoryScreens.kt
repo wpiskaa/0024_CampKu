@@ -52,6 +52,8 @@ import com.example.campku.ui.components.StateContent
 import com.example.campku.ui.components.SubScreen
 import com.example.campku.ui.navigation.MainScreen
 import com.example.campku.ui.navigation.Routes
+import com.example.campku.ui.navigation.navigateToTab
+import com.example.campku.ui.navigation.safePopBack
 
 @Composable
 fun CategoryListScreen(navController: NavHostController, isAdmin: Boolean) {
@@ -65,19 +67,7 @@ fun CategoryListScreen(navController: NavHostController, isAdmin: Boolean) {
     OnResume(vm::refresh)
     MessageEffect(message, snackbar, vm::consumeMessage)
 
-    MainScreen(
-        navController = navController,
-        isAdmin = isAdmin,
-        title = "Kategori",
-        snackbarHostState = snackbar,
-        floatingActionButton = {
-            if (isAdmin) {
-                FloatingActionButton(onClick = { navController.navigate(Routes.categoryForm()) }) {
-                    Icon(Icons.Filled.Add, "Tambah kategori")
-                }
-            }
-        },
-    ) { padding ->
+    val bodyContent: @Composable (PaddingValues) -> Unit = { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             SearchField(
                 value = search,
@@ -96,8 +86,8 @@ fun CategoryListScreen(navController: NavHostController, isAdmin: Boolean) {
                         items(list, key = { it.id }) { c ->
                             ListCard(
                                 onClick = {
-                                    if (isAdmin) navController.navigate(Routes.categoryForm(c.id))
-                                    else navController.navigate(Routes.EQUIPMENTS)
+                                    if (isAdmin) navController.navigate(Routes.categoryForm(c.id)) { launchSingleTop = true }
+                                    else navController.navigateToTab(Routes.EQUIPMENTS, isAdmin = false)
                                 },
                             ) {
                                 Icon(Icons.Filled.Category, null, tint = MaterialTheme.colorScheme.primary)
@@ -113,7 +103,7 @@ fun CategoryListScreen(navController: NavHostController, isAdmin: Boolean) {
                                     )
                                 }
                                 if (isAdmin) {
-                                    IconButton(onClick = { navController.navigate(Routes.categoryForm(c.id)) }) {
+                                    IconButton(onClick = { navController.navigate(Routes.categoryForm(c.id)) { launchSingleTop = true } }) {
                                         Icon(Icons.Filled.Edit, "Ubah", tint = MaterialTheme.colorScheme.primary)
                                     }
                                     IconButton(onClick = { deleteTarget = c }) {
@@ -126,6 +116,28 @@ fun CategoryListScreen(navController: NavHostController, isAdmin: Boolean) {
                 }
             }
         }
+    }
+
+    if (isAdmin) {
+        SubScreen(
+            title = "Kategori",
+            onBack = { navController.safePopBack() },
+            snackbarHostState = snackbar,
+            floatingActionButton = {
+                FloatingActionButton(onClick = { navController.navigate(Routes.categoryForm()) { launchSingleTop = true } }) {
+                    Icon(Icons.Filled.Add, "Tambah kategori")
+                }
+            },
+            content = bodyContent,
+        )
+    } else {
+        MainScreen(
+            navController = navController,
+            isAdmin = false,
+            title = "Kategori",
+            snackbarHostState = snackbar,
+            content = bodyContent,
+        )
     }
 
     deleteTarget?.let { target ->

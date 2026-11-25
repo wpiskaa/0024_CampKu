@@ -80,6 +80,8 @@ import com.example.campku.ui.components.StatusChip
 import com.example.campku.ui.components.SubScreen
 import com.example.campku.ui.navigation.MainScreen
 import com.example.campku.ui.navigation.Routes
+import com.example.campku.ui.navigation.navigateToTab
+import com.example.campku.ui.navigation.safePopBack
 import com.example.campku.util.Validators
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -332,7 +334,7 @@ fun ProfileScreen(navController: NavHostController, user: User) {
                     title = if (user.isAdmin) "Kelola Riwayat Penyewaan" else "Riwayat Pesanan Saya",
                     subtitle = if (user.isAdmin) "Pantau status sewa, diskon & pengembalian" else "Lihat status & riwayat sewa alat Anda",
                     iconTint = MaterialTheme.colorScheme.primary,
-                    onClick = { navController.navigate(Routes.RENTALS) },
+                    onClick = { navController.navigateToTab(Routes.RENTALS, user.isAdmin) },
                 )
                 ProfileMenuDivider()
                 ProfileMenuItem(
@@ -340,7 +342,7 @@ fun ProfileScreen(navController: NavHostController, user: User) {
                     title = "Buat Pengajuan Sewa",
                     subtitle = "Pilih alat camping dengan katalog foto",
                     iconTint = MaterialTheme.colorScheme.secondary,
-                    onClick = { navController.navigate(Routes.rentalForm()) },
+                    onClick = { navController.navigate(Routes.rentalForm()) { launchSingleTop = true } },
                 )
                 ProfileMenuDivider()
                 ProfileMenuItem(
@@ -348,7 +350,7 @@ fun ProfileScreen(navController: NavHostController, user: User) {
                     title = "Jelajahi Katalog Alat",
                     subtitle = "Cek stok & harga sewa perlengkapan terbaru",
                     iconTint = MaterialTheme.colorScheme.primary,
-                    onClick = { navController.navigate(Routes.EQUIPMENTS) },
+                    onClick = { navController.navigateToTab(Routes.EQUIPMENTS, user.isAdmin) },
                 )
             }
 
@@ -360,7 +362,7 @@ fun ProfileScreen(navController: NavHostController, user: User) {
                         title = "Kelola Akun Pengguna",
                         subtitle = "Atur akun Admin dan Penyewa",
                         iconTint = MaterialTheme.colorScheme.primary,
-                        onClick = { navController.navigate(Routes.USERS) },
+                        onClick = { navController.navigate(Routes.USERS) { launchSingleTop = true } },
                     )
                     ProfileMenuDivider()
                     ProfileMenuItem(
@@ -368,7 +370,7 @@ fun ProfileScreen(navController: NavHostController, user: User) {
                         title = "Kelola Kategori Alat",
                         subtitle = "Tambah atau ubah kategori perlengkapan",
                         iconTint = MaterialTheme.colorScheme.secondary,
-                        onClick = { navController.navigate(Routes.CATEGORIES) },
+                        onClick = { navController.navigate(Routes.CATEGORIES) { launchSingleTop = true } },
                     )
                     ProfileMenuDivider()
                     ProfileMenuItem(
@@ -376,7 +378,7 @@ fun ProfileScreen(navController: NavHostController, user: User) {
                         title = "Data Pelanggan",
                         subtitle = "Lihat dan perbarui profil penyewa",
                         iconTint = MaterialTheme.colorScheme.primary,
-                        onClick = { navController.navigate(Routes.CUSTOMERS) },
+                        onClick = { navController.navigateToTab(Routes.CUSTOMERS, user.isAdmin) },
                     )
                 }
             }
@@ -628,7 +630,7 @@ fun AccountSettingsScreen(navController: NavHostController, user: User) {
 
     SubScreen(
         title = "Pengaturan Akun",
-        onBack = { navController.popBackStack() },
+        onBack = { navController.safePopBack() },
         snackbarHostState = snackbar,
     ) { padding ->
         Column(
