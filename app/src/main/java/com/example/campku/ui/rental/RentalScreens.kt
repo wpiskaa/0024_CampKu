@@ -1,5 +1,6 @@
 package com.example.campku.ui.rental
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -668,16 +669,37 @@ fun RentalDetailScreen(
     val availableDatesForActions = remember(allItemsForActions) {
         allItemsForActions.map { it.rentDate }.distinct().sortedDescending()
     }
-    val activeDate = selectedDate?.takeIf { it in availableDatesForActions }
-        ?: primaryForActions?.rentDate
-        ?: availableDatesForActions.firstOrNull()
+    // Untuk Penyewa langsung buka detail tanggalnya; untuk Admin tampilkan daftar tanggal vertikal dulu baru detail saat diklik
+    val activeDate = if (isAdmin) {
+        selectedDate?.takeIf { it in availableDatesForActions }
+    } else {
+        selectedDate?.takeIf { it in availableDatesForActions }
+            ?: primaryForActions?.rentDate
+            ?: availableDatesForActions.firstOrNull()
+    }
     val activeDateItems = remember(allItemsForActions, activeDate) {
         if (activeDate == null) emptyList() else allItemsForActions.filter { it.rentDate == activeDate }
     }
 
+    val handleBack: () -> Unit = {
+        if (isAdmin && selectedDate != null) {
+            selectedDate = null
+        } else {
+            onBack()
+        }
+    }
+
+    BackHandler(enabled = isAdmin && selectedDate != null) {
+        selectedDate = null
+    }
+
     SubScreen(
-        title = if (isAdmin) "Detail Sewa Pelanggan" else "Detail Sewa",
-        onBack = onBack,
+        title = when {
+            isAdmin && activeDate == null -> "Riwayat Tanggal Sewa"
+            activeDate != null -> "Sewa ${formatDisplayDate(activeDate)}"
+            else -> "Detail Sewa"
+        },
+        onBack = handleBack,
         snackbarHostState = snackbar,
         actions = {
             if (activeDateItems.isNotEmpty()) {
@@ -695,8 +717,6 @@ fun RentalDetailScreen(
                     .sortedByDescending { it.key }
                     .map { it.key to it.value }
             }
-            val currentSelectedDate = activeDate ?: primary.rentDate
-            val currentGroup = dateGroups.firstOrNull { it.first == currentSelectedDate } ?: dateGroups.first()
             val today = remember { todayIso() }
             val yesterday = remember { addDaysIso(today, -1) }
 
@@ -742,67 +762,97 @@ fun RentalDetailScreen(
                     }
                 }
 
-                // 2. Filter Pilih Tanggal Sewa (memisahkan sewa hari ini, kemarin, dan tanggal lainnya)
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        "Pilih Tanggal Sewa",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(dateGroups, key = { it.first }) { (dateStr, listOnDate) ->
-                            val tag = when (dateStr) {
-                                today -> "Hari Ini • ${formatDisplayDate(dateStr)}"
-                                yesterday -> "Kemarin • ${formatDisplayDate(dateStr)}"
-                                else -> formatDisplayDate(dateStr)
-                            }
-                            FilterChip(
-                                selected = dateStr == currentGroup.first,
-                                onClick = { selectedDate = dateStr },
-                                leadingIcon = {
+                if (activeDate == null) {
+                    // 2A. Halaman Pertama (Admin): Daftar Tanggal / Bulan / Tahun berjejer vertikal dari atas ke bawah
+                    SectionTitle("Pilih Tanggal Sewa")
+                    dateGroups.forEach { (dateStr, listOnDate) ->
+                        val dateTitle = when (dateStr) {
+                            today -> "Hari Ini • ${formatDisplayDate(dateStr)}"
+                            yesterday -> "Kemarin • ${formatDisplayDate(dateStr)}"
+                            else -> formatDisplayDate(dateStr)
+                        }
+                        val rep = listOnDate.firstOrNull { it.isLate }
+                            ?: listOnDate.firstOrNull { it.status == RentalStatus.DISEWA }
+                            ?: listOnDate.firstOrNull { it.status == RentalStatus.DIPESAN }
+                            ?: listOnDate.first()
+                        val totalUnits = listOnDate.sumOf { it.quantity }
+                        val totalCost = listOnDate.sumOf { it.totalPrice + it.lateFee }
+
+                        ListCard(onClick = { selectedDate = dateStr }) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                modifier = Modifier.size(44.dp),
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         Icons.Filled.DateRange,
                                         contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(22.dp),
                                     )
-                                },
-                                label = {
-                                    Text("$tag • ${listOnDate.size}", fontWeight = FontWeight.SemiBold)
-                                },
-                            )
+                                }
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    dateTitle,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(
+                                    "${listOnDate.size} jenis barang • $totalUnits unit",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Text(
+                                    formatRupiah(totalCost),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                StatusChip(rep.statusLabel(), rep.statusColor())
+                                Icon(
+                                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
-                }
-
-                // 3. Rincian Sewa Khusus Tanggal yang Dipilih
-                val (rentDate, rentalsOnDate) = currentGroup
-                val groupPrimary = rentalsOnDate.first()
-                DateRentalSectionHeader(
-                    rentDate = rentDate,
-                    rentals = rentalsOnDate,
-                )
-                BookingPassCard(
-                    primary = groupPrimary,
-                    items = rentalsOnDate,
-                    onOpenReceipt = { receiptBundle = groupPrimary to rentalsOnDate },
-                )
-                rentalsOnDate.forEachIndexed { index, r ->
-                    RentalEquipmentDetailCard(
-                        index = index + 1,
-                        r = r,
-                        isAdmin = isAdmin,
-                        busy = busy,
-                        photoVersion = photoVersion,
-                        storage = storage,
-                        onEdit = { onEdit(r.id) },
-                        onDelete = { deleteTarget = r },
-                        onApplyBonusDay = { vm.applyBonusDay(r.id) },
-                        onOpenDiscount = { discountTarget = r },
-                        onUploadPickupPhoto = { uri -> vm.uploadPickupPhoto(r.id, uri) },
-                        onUploadReturnPhoto = { uri -> vm.uploadReturnPhoto(r.id, uri) },
-                        onConfirmStatus = { nextStatus -> statusTarget = r to nextStatus },
+                } else {
+                    // 2B. Halaman Detail Sewa Alat untuk Tanggal yang Dipilih
+                    val currentGroup = dateGroups.firstOrNull { it.first == activeDate } ?: dateGroups.first()
+                    val (rentDate, rentalsOnDate) = currentGroup
+                    val groupPrimary = rentalsOnDate.first()
+                    DateRentalSectionHeader(
+                        rentDate = rentDate,
+                        rentals = rentalsOnDate,
                     )
+                    BookingPassCard(
+                        primary = groupPrimary,
+                        items = rentalsOnDate,
+                        onOpenReceipt = { receiptBundle = groupPrimary to rentalsOnDate },
+                    )
+                    rentalsOnDate.forEachIndexed { index, r ->
+                        RentalEquipmentDetailCard(
+                            index = index + 1,
+                            r = r,
+                            isAdmin = isAdmin,
+                            busy = busy,
+                            photoVersion = photoVersion,
+                            storage = storage,
+                            onEdit = { onEdit(r.id) },
+                            onDelete = { deleteTarget = r },
+                            onApplyBonusDay = { vm.applyBonusDay(r.id) },
+                            onOpenDiscount = { discountTarget = r },
+                            onUploadPickupPhoto = { uri -> vm.uploadPickupPhoto(r.id, uri) },
+                            onUploadReturnPhoto = { uri -> vm.uploadReturnPhoto(r.id, uri) },
+                            onConfirmStatus = { nextStatus -> statusTarget = r to nextStatus },
+                        )
+                    }
                 }
                 Spacer(Modifier.height(8.dp))
             }
