@@ -37,15 +37,38 @@ object NetworkModule {
     @Volatile
     private var activeHost: String = if (isEmulator) "10.0.2.2" else "127.0.0.1"
 
+    @Volatile
+    private var customHost: String? = null
+
     /** Alamat default untuk inisialisasi Retrofit. */
     const val baseUrl: String = "http://10.0.2.2:3000/"
 
     /** Alamat aktif yang terakhir berhasil dihubungi (dipakai untuk URL foto & refresh token). */
-    fun currentBaseUrl(): String = "http://$activeHost:$PORT/"
+    fun currentBaseUrl(): String = "http://${customHost ?: activeHost}:$PORT/"
+
+    fun currentHost(): String = customHost ?: activeHost
+
+    /** Mengatur host/IP server secara manual dari menu Profil & Pengaturan (null = deteksi otomatis). */
+    fun setCustomHost(host: String?) {
+        val cleaned = host?.trim()
+            ?.removePrefix("http://")
+            ?.removePrefix("https://")
+            ?.substringBefore("/")
+            ?.substringBefore(":")
+            ?.takeIf { it.isNotBlank() }
+        customHost = cleaned
+        if (cleaned != null) {
+            activeHost = cleaned
+        } else {
+            activeHost = if (isEmulator) "10.0.2.2" else "127.0.0.1"
+        }
+    }
 
     private val hostFallbackInterceptor = Interceptor { chain ->
         val original = chain.request()
-        val candidates = if (isEmulator) {
+        val candidates = if (customHost != null) {
+            listOf(customHost!!, "127.0.0.1", LAN_FALLBACK_HOST, "10.0.2.2").distinct()
+        } else if (isEmulator) {
             listOf(activeHost, "10.0.2.2", "127.0.0.1").distinct()
         } else {
             listOf(activeHost, "127.0.0.1", LAN_FALLBACK_HOST, "10.0.2.2").distinct()

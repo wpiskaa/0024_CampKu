@@ -94,7 +94,12 @@ fun CategoryListScreen(navController: NavHostController, isAdmin: Boolean) {
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         items(list, key = { it.id }) { c ->
-                            ListCard(onClick = { if (isAdmin) navController.navigate(Routes.categoryForm(c.id)) }) {
+                            ListCard(
+                                onClick = {
+                                    if (isAdmin) navController.navigate(Routes.categoryForm(c.id))
+                                    else navController.navigate(Routes.EQUIPMENTS)
+                                },
+                            ) {
                                 Icon(Icons.Filled.Category, null, tint = MaterialTheme.colorScheme.primary)
                                 Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                                     Text(c.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)

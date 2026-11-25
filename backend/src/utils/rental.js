@@ -58,17 +58,31 @@ function validateDates(rentDate, dueDate) {
   if (b < a) throw new HttpError(400, 'Tanggal kembali tidak boleh sebelum tanggal sewa');
 }
 
+/** Menambah sejumlah hari pada tanggal YYYY-MM-DD. */
+function addDaysStr(dateStr, daysToAdd) {
+  const ms = parseDate(dateStr, 'Tanggal') + daysToAdd * MS_PER_DAY;
+  const d = new Date(ms);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 /**
  * Melengkapi baris sewa dengan info turunan:
  *  - is_late    : FR-12, status Terlambat otomatis (sedang disewa & lewat jatuh tempo)
  *  - late_days  : jumlah hari terlambat
  *  - late_fee   : untuk sewa aktif yang terlambat dihitung berjalan (estimasi sampai hari ini)
  *  - days       : durasi sewa
+ *  - bonus_days : jumlah hari bonus gratis dari promo Admin (sewa >= 2 hari dapat +1 hari)
  */
 function decorateRental(row) {
   const today = todayStr();
   const out = { ...row };
   out.days = rentalDays(row.rent_date, row.due_date);
+  const unitPerDay = (row.daily_price || 0) * (row.quantity || 1);
+  const standardTotal = out.days * unitPerDay;
+  out.bonus_days = unitPerDay > 0 ? Math.max(0, Math.round((standardTotal - row.total_price) / unitPerDay)) : 0;
   out.is_late = false;
   out.late_days = 0;
 
@@ -83,6 +97,6 @@ function decorateRental(row) {
 }
 
 module.exports = {
-  todayStr, parseDate, rentalDays, calcTotal, lateDays, calcLateFee, validateDates, decorateRental,
+  todayStr, parseDate, addDaysStr, rentalDays, calcTotal, lateDays, calcLateFee, validateDates, decorateRental,
 };
 

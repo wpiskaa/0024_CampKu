@@ -14,7 +14,7 @@ const sha256 = (text) => crypto.createHash('sha256').update(text).digest('hex');
 
 async function userWithPhone(id) {
   const [rows] = await pool.query(
-    `SELECT u.id, u.name, u.email, u.role, u.created_at, c.phone
+    `SELECT u.id, u.name, u.email, u.role, u.created_at, c.phone, c.address, c.id_number
        FROM users u LEFT JOIN customers c ON c.user_id = u.id WHERE u.id = ?`,
     [id]
   );
@@ -104,6 +104,51 @@ router.get('/me', authenticate, asyncHandler(async (req, res) => {
   const user = await userWithPhone(req.user.id);
   if (!user) throw new HttpError(401, 'Akun tidak ditemukan');
   res.json(user);
+}));
+
+// Ubah profil & pengaturan akun sendiri --------------------------
+router.put('/me', authenticate, asyncHandler(async (req, res) => {
+  const name = requireText(req.body.name, 'Nama', 100);
+  const email = requireText(req.body.email, 'Email', 150).toLowerCase();
+  const phone = optionalText(req.body.phone, 'Nomor HP', 25);
+  const address = optionalText(req.body.address, 'Alamat', 500);
+  const idNumber = optionalText(req.body.id_number, 'Nomor identitas', 50);
+  const password = typeof req.body.password === 'string' ? req.body.password.trim() : '';
+
+  if (!EMAIL_RE.test(email)) throw new HttpError(400, 'Format email tidak valid');
+  if (phone && !/^[0-9+\-\s]{8,25}$/.test(phone)) throw new HttpError(400, 'Nomor HP tidak valid');
+  if (password && password.length < 6) throw new HttpError(400, 'Password baru minimal 6 karakter');
+
+  const [dup] = await pool.query('SELECT id FROM users WHERE email = ? AND id <> ?', [email, req.user.id]);
+  if (dup.length) throw new HttpError(409, 'Email sudah dipakai akun lain');
+
+  await withTransaction(async (conn) => {
+    if (password) {
+      const hash = await bcrypt.hash(password, 10);
+      await conn.query('UPDATE users SET name = ?, email = ?, password_hash = ? WHERE id = ?', [
+        name, email, hash, req.user.id,
+      ]);
+    } else {
+      await conn.query('UPDATE users SET name = ?, email = ? WHERE id = ?', [
+        name, email, req.user.id,
+      ]);
+    }
+
+    const [cust] = await conn.query('SELECT id FROM customers WHERE user_id = ?', [req.user.id]);
+    if (cust.length) {
+      await conn.query(
+        'UPDATE customers SET name = ?, phone = ?, address = ?, id_number = ? WHERE user_id = ?',
+        [name, phone || '-', address, idNumber, req.user.id]
+      );
+    } else if (phone || address || idNumber) {
+      await conn.query(
+        'INSERT INTO customers (user_id, name, phone, address, id_number) VALUES (?, ?, ?, ?, ?)',
+        [req.user.id, name, phone || '-', address, idNumber]
+      );
+    }
+  });
+
+  res.json(await userWithPhone(req.user.id));
 }));
 
 module.exports = router;

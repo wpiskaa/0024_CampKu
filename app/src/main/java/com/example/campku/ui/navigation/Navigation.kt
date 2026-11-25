@@ -87,22 +87,34 @@ object Routes {
     fun userForm(id: Int = 0) = "user_form/$id"
 }
 
-private data class Tab(val route: String, val label: String, val icon: ImageVector)
+private data class Tab(
+    val route: String,
+    val label: String,
+    val icon: ImageVector,
+    val isCenter: Boolean = false,
+)
 
+/**
+ * Menu bawah Penyewa: 5 tab dengan Beranda tepat di tengah (posisi ke-3).
+ */
 private val userTabs = listOf(
-    Tab(Routes.HOME_USER, "Beranda", Icons.Filled.Home),
     Tab(Routes.EQUIPMENTS, "Alat", Icons.Filled.Terrain),
+    Tab(Routes.CATEGORIES, "Kategori", Icons.Filled.Category),
+    Tab(Routes.HOME_USER, "Beranda", Icons.Filled.Home, isCenter = true),
     Tab(Routes.RENTALS, "Sewa", Icons.Filled.Receipt),
     Tab(Routes.PROFILE, "Profil", Icons.Filled.Person),
 )
 
+/**
+ * Menu bawah Admin: 6 tab dengan Beranda di tengah (posisi ke-3).
+ * Menu Pengguna juga tetap dapat diakses melalui halaman Profil & Pengaturan atau Beranda Admin.
+ */
 private val adminTabs = listOf(
-    Tab(Routes.HOME_ADMIN, "Beranda", Icons.Filled.Home),
     Tab(Routes.EQUIPMENTS, "Alat", Icons.Filled.Terrain),
-    Tab(Routes.RENTALS, "Sewa", Icons.Filled.Receipt),
     Tab(Routes.CATEGORIES, "Kategori", Icons.Filled.Category),
+    Tab(Routes.HOME_ADMIN, "Beranda", Icons.Filled.Home, isCenter = true),
+    Tab(Routes.RENTALS, "Sewa", Icons.Filled.Receipt),
     Tab(Routes.CUSTOMERS, "Pelanggan", Icons.Filled.Group),
-    Tab(Routes.USERS, "Pengguna", Icons.Filled.ManageAccounts),
     Tab(Routes.PROFILE, "Profil", Icons.Filled.Person),
 )
 
@@ -157,24 +169,23 @@ private fun AppBottomBar(navController: NavHostController, isAdmin: Boolean) {
     val tabs = if (isAdmin) adminTabs else userTabs
     val homeRoute = Routes.home(isAdmin)
 
-    Surface(tonalElevation = 3.dp, shadowElevation = 8.dp, color = MaterialTheme.colorScheme.surface) {
-        val scroll = rememberScrollState()
+    Surface(tonalElevation = 3.dp, shadowElevation = 10.dp, color = MaterialTheme.colorScheme.surface) {
         Row(
             modifier = Modifier
                 .navigationBarsPadding()
                 .fillMaxWidth()
-                .height(68.dp)
-                .then(if (isAdmin) Modifier.horizontalScroll(scroll) else Modifier),
-            horizontalArrangement = Arrangement.SpaceAround,
+                .height(74.dp)
+                .padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             tabs.forEach { tab ->
-                val itemModifier = if (isAdmin) Modifier.width(80.dp) else Modifier.weight(1f)
                 BottomItem(
                     selected = currentRoute == tab.route,
                     label = tab.label,
                     icon = tab.icon,
-                    modifier = itemModifier,
+                    isCenter = tab.isCenter,
+                    modifier = Modifier.weight(1f),
                     onClick = {
                         if (currentRoute != tab.route) {
                             navController.navigate(tab.route) {
@@ -195,34 +206,48 @@ private fun BottomItem(
     selected: Boolean,
     label: String,
     icon: ImageVector,
+    isCenter: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    val tint = when {
+        isCenter && selected -> MaterialTheme.colorScheme.onPrimary
+        isCenter -> MaterialTheme.colorScheme.primary
+        selected -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val pillColor = when {
+        isCenter && selected -> MaterialTheme.colorScheme.primary
+        isCenter -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f)
+        selected -> MaterialTheme.colorScheme.primaryContainer
+        else -> Color.Transparent
+    }
     Column(
         modifier = modifier
             .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
+            .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+            shape = RoundedCornerShape(if (isCenter) 20.dp else 16.dp),
+            color = pillColor,
+            shadowElevation = if (isCenter) 3.dp else 0.dp,
         ) {
             Icon(
                 icon,
                 contentDescription = label,
                 tint = tint,
                 modifier = Modifier
-                    .padding(horizontal = 18.dp, vertical = 4.dp)
-                    .size(22.dp),
+                    .padding(horizontal = if (isCenter) 18.dp else 12.dp, vertical = if (isCenter) 6.dp else 4.dp)
+                    .size(if (isCenter) 24.dp else 21.dp),
             )
         }
         Text(
             label,
             style = MaterialTheme.typography.labelSmall,
-            color = tint,
+            color = if (selected || isCenter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 2.dp),
         )
     }

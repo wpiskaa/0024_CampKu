@@ -30,10 +30,18 @@ class RentalListViewModel(private val repo: RentalRepository) : ListViewModel<Re
     override suspend fun deleteById(id: Int) = repo.delete(id)
 }
 
-/** Detail sewa + aksi Admin: ubah status (FR-10..FR-12), foto pengembalian, hapus. */
+/**
+ * Detail sewa per pelanggan/transaksi + aksi Admin:
+ * menampilkan seluruh barang yang disewa oleh penyewa tersebut, ubah status (FR-10..FR-12),
+ * pemberian promo bonus +1 hari oleh Admin, foto sebelum & sesudah sewa, serta hapus.
+ */
 class RentalDetailViewModel(private val repo: RentalRepository, private val id: Int) : ViewModel() {
     private val _state = MutableStateFlow<UiState<Rental>>(UiState.Loading)
     val state: StateFlow<UiState<Rental>> = _state.asStateFlow()
+
+    /** Seluruh barang sewaan milik pelanggan yang sama agar tampil lengkap dalam satu halaman detail. */
+    private val _customerRentals = MutableStateFlow<List<Rental>>(emptyList())
+    val customerRentals: StateFlow<List<Rental>> = _customerRentals.asStateFlow()
 
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
@@ -57,24 +65,41 @@ class RentalDetailViewModel(private val repo: RentalRepository, private val id: 
             if (!silent) _state.value = UiState.Loading
             val result = repo.get(id)
             if (silent && result.isFailure && _state.value is UiState.Success) return@launch
+            result.onSuccess { primary ->
+                val allForCustomer = repo.list(null, null).getOrNull()
+                    ?.filter { it.customerId == primary.customerId }
+                    ?.sortedWith(compareBy<Rental> { it.id != primary.id }.thenByDescending { it.id })
+                    ?: listOf(primary)
+                _customerRentals.value = allForCustomer
+            }
             _state.value = result.toUiState()
         }
     }
 
+    private fun replaceInList(updated: Rental) {
+        _customerRentals.update { list ->
+            list.map { if (it.id == updated.id) updated else it }
+        }
+        val current = (_state.value as? UiState.Success)?.data
+        if (current == null || current.id == updated.id) {
+            _state.value = UiState.Success(updated)
+        }
+    }
+
     /** [next]: [RentalStatus.DISEWA] atau [RentalStatus.DIKEMBALIKAN]. */
-    fun changeStatus(next: String) {
+    fun changeStatus(targetId: Int, next: String) {
         if (_busy.value) return
         viewModelScope.launch {
             _busy.value = true
-            repo.changeStatus(id, next).fold(
+            repo.changeStatus(targetId, next).fold(
                 onSuccess = { rental ->
-                    _state.value = UiState.Success(rental)
+                    replaceInList(rental)
                     _message.value = if (next == RentalStatus.DISEWA) {
-                        "Status diubah menjadi Disewa, stok berkurang"
+                        "Status ${rental.equipmentName} diubah menjadi Disewa, stok berkurang"
                     } else if (rental.lateFee > 0) {
-                        "Dikembalikan. Denda keterlambatan dihitung otomatis"
+                        "${rental.equipmentName} dikembalikan. Denda keterlambatan dihitung otomatis"
                     } else {
-                        "Dikembalikan, stok bertambah"
+                        "${rental.equipmentName} dikembalikan, stok bertambah"
                     }
                 },
                 onFailure = { _message.value = it.message },
@@ -83,37 +108,62 @@ class RentalDetailViewModel(private val repo: RentalRepository, private val id: 
         }
     }
 
-    /** Foto kondisi sebelum disewa: simpan ke filesDir lalu unggah salinannya ke server. */
-    fun uploadPickupPhoto(uri: Uri) {
+    /** Promo Admin: sewa minimal 2 hari dapat bonus +1 hari gratis (jadi 3 hari tanpa biaya tambahan). */
+    fun applyBonusDay(targetId: Int) {
         if (_busy.value) return
         viewModelScope.launch {
             _busy.value = true
-            val (rental, warning) = repo.savePickupPhoto(id, uri)
+            repo.applyBonusDay(targetId).fold(
+                onSuccess = { rental ->
+                    replaceInList(rental)
+                    _message.value = "Bonus +1 hari gratis berhasil diberikan untuk ${rental.equipmentName} (kembali: ${rental.dueDate})"
+                },
+                onFailure = { _message.value = it.message },
+            )
+            _busy.value = false
+        }
+    }
+
+    /** Foto kondisi sebelum disewa: simpan ke filesDir lalu unggah salinannya ke server. */
+    fun uploadPickupPhoto(targetId: Int, uri: Uri) {
+        if (_busy.value) return
+        viewModelScope.launch {
+            _busy.value = true
+            val (rental, warning) = repo.savePickupPhoto(targetId, uri)
             _photoVersion.update { it + 1 }
-            if (rental != null) _state.value = UiState.Success(rental)
+            if (rental != null) replaceInList(rental)
             _message.value = warning ?: "Foto kondisi sebelum disewa disimpan"
             _busy.value = false
         }
     }
 
     /** FR-14: simpan foto pengembalian ke filesDir lalu unggah salinannya ke server. */
-    fun uploadReturnPhoto(uri: Uri) {
+    fun uploadReturnPhoto(targetId: Int, uri: Uri) {
         if (_busy.value) return
         viewModelScope.launch {
             _busy.value = true
-            val (rental, warning) = repo.saveReturnPhoto(id, uri)
+            val (rental, warning) = repo.saveReturnPhoto(targetId, uri)
             _photoVersion.update { it + 1 }
-            if (rental != null) _state.value = UiState.Success(rental)
+            if (rental != null) replaceInList(rental)
             _message.value = warning ?: "Foto kondisi setelah disewa disimpan"
             _busy.value = false
         }
     }
 
-    fun delete() {
+    fun delete(targetId: Int = id) {
         viewModelScope.launch {
             _busy.value = true
-            repo.delete(id).fold(
-                onSuccess = { _deleted.value = true },
+            repo.delete(targetId).fold(
+                onSuccess = {
+                    val remaining = _customerRentals.value.filterNot { it.id == targetId }
+                    _customerRentals.value = remaining
+                    if (remaining.isEmpty()) {
+                        _deleted.value = true
+                    } else {
+                        _state.value = UiState.Success(remaining.first())
+                        _message.value = "Barang sewaan dihapus"
+                    }
+                },
                 onFailure = { _message.value = it.message },
             )
             _busy.value = false
@@ -139,7 +189,8 @@ data class RentalFormState(
     val customerId: Int? = null,
     val items: List<RentalItemInput> = listOf(RentalItemInput()),
     val rentDate: String = todayIso(),
-    val dueDate: String = addDaysIso(todayIso(), 1),
+    val dueDate: String = addDaysIso(todayIso(), 2),
+    val bonusDay: Boolean = false,
     val errors: Map<String, String> = emptyMap(),
     val saving: Boolean = false,
     val error: String? = null,
@@ -271,16 +322,17 @@ class RentalFormViewModel(
         _state.update { it.copy(saving = true, error = null) }
         viewModelScope.launch {
             val customerId = if (isAdmin) s.customerId else null
+            val applyBonus = isAdmin && s.bonusDay
             if (isEdit) {
                 val (eqId, qty) = mergedItems.first()
-                val req = RentalRequest(customerId, eqId, qty, s.rentDate, s.dueDate)
+                val req = RentalRequest(customerId, eqId, qty, s.rentDate, s.dueDate, bonusDay = applyBonus)
                 repo.update(id, req).fold(
                     onSuccess = { _state.update { it.copy(saving = false, saved = true) } },
                     onFailure = { e -> _state.update { it.copy(saving = false, error = e.message) } },
                 )
             } else {
                 for ((eqId, qty) in mergedItems) {
-                    val req = RentalRequest(customerId, eqId, qty, s.rentDate, s.dueDate)
+                    val req = RentalRequest(customerId, eqId, qty, s.rentDate, s.dueDate, bonusDay = applyBonus)
                     val res = repo.create(req)
                     if (res.isFailure) {
                         _state.update { it.copy(saving = false, error = res.exceptionOrNull()?.message) }

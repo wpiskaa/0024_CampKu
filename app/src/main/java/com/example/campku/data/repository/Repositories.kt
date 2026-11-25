@@ -10,6 +10,7 @@ import com.example.campku.data.model.Dashboard
 import com.example.campku.data.model.Equipment
 import com.example.campku.data.model.EquipmentRequest
 import com.example.campku.data.model.LoginRequest
+import com.example.campku.data.model.ProfileUpdateRequest
 import com.example.campku.data.model.RegisterRequest
 import com.example.campku.data.model.Rental
 import com.example.campku.data.model.RentalRequest
@@ -78,6 +79,12 @@ class AuthRepository(private val api: ApiService, private val tokenStore: TokenS
         user
     }
 
+    suspend fun updateProfile(req: ProfileUpdateRequest): Result<User> = apiCall {
+        val user = api.updateProfile(req)
+        tokenStore.updateUser(user)
+        user
+    }
+
     /** Logout selalu menghapus sesi lokal, walau server tidak terjangkau. */
     suspend fun logout() {
         runCatching { api.logout() }
@@ -140,6 +147,7 @@ class RentalRepository(private val api: ApiService, private val photos: PhotoSto
     suspend fun create(r: RentalRequest) = apiCall { api.createRental(r) }
     suspend fun update(id: Int, r: RentalRequest) = apiCall { api.updateRental(id, r) }
     suspend fun changeStatus(id: Int, status: String) = apiCall { api.updateRentalStatus(id, StatusRequest(status)) }
+    suspend fun applyBonusDay(id: Int) = apiCall { api.applyBonusDay(id) }
 
     suspend fun delete(id: Int) = apiCall {
         api.deleteRental(id)

@@ -24,9 +24,20 @@ data class User(
     val email: String,
     val role: String,
     val phone: String? = null,
+    val address: String? = null,
+    @SerializedName("id_number") val idNumber: String? = null,
 ) {
     val isAdmin: Boolean get() = role == Role.ADMIN
 }
+
+data class ProfileUpdateRequest(
+    val name: String,
+    val email: String,
+    val phone: String?,
+    val address: String?,
+    @SerializedName("id_number") val idNumber: String?,
+    val password: String? = null,
+)
 
 data class LoginRequest(val email: String, val password: String)
 
@@ -125,6 +136,7 @@ data class Rental(
     @SerializedName("pickup_photo_path") val pickupPhotoPath: String? = null,
     @SerializedName("return_photo_path") val returnPhotoPath: String?,
     val days: Int = 1,
+    @SerializedName("bonus_days") val bonusDays: Int = 0,
     @SerializedName("is_late") val isLate: Boolean = false,
     @SerializedName("late_days") val lateDays: Int = 0,
 )
@@ -135,6 +147,7 @@ data class RentalRequest(
     val quantity: Int,
     @SerializedName("rent_date") val rentDate: String,
     @SerializedName("due_date") val dueDate: String,
+    @SerializedName("bonus_day") val bonusDay: Boolean = false,
 )
 
 data class StatusRequest(val status: String)

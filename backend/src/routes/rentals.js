@@ -4,7 +4,7 @@ const { HttpError, asyncHandler, toInt, likePattern } = require('../utils/http')
 const { authenticate, adminOnly } = require('../middleware/auth');
 const { photoUpload, removeFile } = require('../middleware/upload');
 const {
-  todayStr, validateDates, calcTotal, calcLateFee, decorateRental,
+  todayStr, addDaysStr, rentalDays, validateDates, calcTotal, calcLateFee, decorateRental,
 } = require('../utils/rental');
 
 const router = express.Router();
@@ -71,10 +71,19 @@ async function parseRental(req) {
     throw new HttpError(400, `Stok ${eq[0].name} tidak cukup (tersedia ${eq[0].stock})`);
   }
 
+  const baseTotal = calcTotal(b.rent_date, b.due_date, eq[0].daily_price, quantity);
+  let finalDueDate = b.due_date;
+  if (req.user.role === 'admin' && Boolean(b.bonus_day)) {
+    if (rentalDays(b.rent_date, b.due_date) < 2) {
+      throw new HttpError(400, 'Promo bonus +1 hari hanya berlaku untuk sewa minimal 2 hari');
+    }
+    finalDueDate = addDaysStr(b.due_date, 1);
+  }
+
   return {
     customerId, equipmentId, quantity,
-    rentDate: b.rent_date, dueDate: b.due_date,
-    total: calcTotal(b.rent_date, b.due_date, eq[0].daily_price, quantity),
+    rentDate: b.rent_date, dueDate: finalDueDate,
+    total: baseTotal,
   };
 }
 
@@ -180,6 +189,26 @@ router.patch('/:id/status', adminOnly, asyncHandler(async (req, res) => {
     }
   });
 
+  res.json(await findOr404(id, req.user));
+}));
+
+// Promo Admin: sewa minimal 2 hari dapat bonus +1 hari gratis (tanpa menambah total_price)
+router.post('/:id/bonus-day', adminOnly, asyncHandler(async (req, res) => {
+  const id = toInt(req.params.id);
+  const current = await findOr404(id, req.user);
+  if (current.status === 'dikembalikan') {
+    throw new HttpError(400, 'Penyewaan yang sudah dikembalikan tidak dapat diberi bonus hari');
+  }
+  if (current.days < 2) {
+    throw new HttpError(400, 'Promo bonus +1 hari hanya berlaku untuk sewa minimal 2 hari');
+  }
+  if (current.bonus_days > 0) {
+    throw new HttpError(400, 'Penyewaan ini sudah mendapatkan bonus +1 hari');
+  }
+  const newDueDate = addDaysStr(current.due_date, 1);
+  await pool.query('UPDATE rentals SET due_date = ?, processed_by = ? WHERE id = ?', [
+    newDueDate, req.user.id, id,
+  ]);
   res.json(await findOr404(id, req.user));
 }));
 

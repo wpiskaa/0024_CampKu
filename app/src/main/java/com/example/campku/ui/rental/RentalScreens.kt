@@ -1,5 +1,7 @@
 package com.example.campku.ui.rental
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,19 +11,30 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CardGiftcard
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -31,8 +44,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,14 +61,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import com.example.campku.CampKuApp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import com.example.campku.CampKuApp
 import com.example.campku.appViewModel
 import com.example.campku.data.local.PhotoStorage
+import com.example.campku.data.model.Equipment
 import com.example.campku.data.model.Rental
 import com.example.campku.data.model.RentalStatus
 import com.example.campku.ui.components.AppTextField
@@ -78,6 +97,7 @@ import com.example.campku.ui.theme.StatusLate
 import com.example.campku.ui.theme.StatusOrdered
 import com.example.campku.ui.theme.StatusRented
 import com.example.campku.ui.theme.StatusReturned
+import com.example.campku.util.addDaysIso
 import com.example.campku.util.estimateTotal
 import com.example.campku.util.formatDisplayDate
 import com.example.campku.util.formatRupiah
@@ -100,7 +120,28 @@ private val statusFilters = listOf(
     RentalStatus.DIKEMBALIKAN,
 )
 
-/** Daftar Sewa (cari + filter status). Penyewa hanya melihat miliknya (dibatasi server). */
+/** Kelompok penyewaan per orang penyewa (untuk daftar Admin). */
+private data class CustomerRentalGroup(
+    val customerId: Int,
+    val customerName: String,
+    val customerPhone: String?,
+    val rentals: List<Rental>,
+) {
+    val primaryId: Int get() = rentals.first().id
+    val totalUnits: Int get() = rentals.sumOf { it.quantity }
+    val totalAmount: Int get() = rentals.sumOf { it.totalPrice + it.lateFee }
+    val representative: Rental
+        get() = rentals.firstOrNull { it.isLate }
+            ?: rentals.firstOrNull { it.status == RentalStatus.DISEWA }
+            ?: rentals.firstOrNull { it.status == RentalStatus.DIPESAN }
+            ?: rentals.first()
+}
+
+/**
+ * Daftar Sewa (cari + filter status).
+ * - Untuk Admin: dikelompokkan berdasarkan Orang Penyewa (pelanggan). Saat diklik, baru mendetail barang apa saja yang disewa.
+ * - Untuk Penyewa: menampilkan daftar sewa miliknya beserta info promo 2 hari jadi 3 hari.
+ */
 @Composable
 fun RentalListScreen(navController: NavHostController, isAdmin: Boolean) {
     val vm = appViewModel { RentalListViewModel(it.rentalRepository) }
@@ -116,7 +157,7 @@ fun RentalListScreen(navController: NavHostController, isAdmin: Boolean) {
     MainScreen(
         navController = navController,
         isAdmin = isAdmin,
-        title = if (isAdmin) "Penyewaan" else "Sewa Saya",
+        title = if (isAdmin) "Daftar Penyewa" else "Sewa Saya",
         snackbarHostState = snackbar,
         floatingActionButton = {
             FloatingActionButton(onClick = { navController.navigate(Routes.rentalForm()) }) {
@@ -128,7 +169,7 @@ fun RentalListScreen(navController: NavHostController, isAdmin: Boolean) {
             SearchField(
                 value = search,
                 onValueChange = vm::onSearchChange,
-                placeholder = if (isAdmin) "Cari pelanggan atau alat" else "Cari nama alat",
+                placeholder = if (isAdmin) "Cari nama penyewa atau alat" else "Cari nama alat",
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
             )
             LazyRow(
@@ -143,19 +184,62 @@ fun RentalListScreen(navController: NavHostController, isAdmin: Boolean) {
                     )
                 }
             }
+            if (!isAdmin) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                ) {
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Filled.CardGiftcard,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary,
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            "Promo Sewa 2 Hari Jadi 3 Hari: Sewa minimal 2 hari dapat bonus +1 hari gratis yang diberikan oleh Administrator saat verifikasi.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
+                }
+            }
             StateContent(items, onRetry = vm::retry) { list ->
                 if (list.isEmpty()) {
                     EmptyState(
                         if (search.isBlank() && filter == null) "Belum ada penyewaan.\nTekan + untuk membuat sewa."
                         else "Penyewaan tidak ditemukan",
                     )
+                } else if (isAdmin) {
+                    val groups = remember(list) {
+                        list.groupBy { it.customerId }.map { (custId, rentals) ->
+                            val first = rentals.first()
+                            CustomerRentalGroup(
+                                customerId = custId,
+                                customerName = first.customerName,
+                                customerPhone = first.customerPhone,
+                                rentals = rentals,
+                            )
+                        }
+                    }
+                    LazyColumn(
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 88.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        items(groups, key = { it.customerId }) { group ->
+                            CustomerRentalGroupCard(group) {
+                                navController.navigate(Routes.rentalDetail(group.primaryId))
+                            }
+                        }
+                    }
                 } else {
                     LazyColumn(
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 88.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         items(list, key = { it.id }) { r ->
-                            RentalCard(r, showCustomer = isAdmin) {
+                            RentalCard(r, showCustomer = false) {
                                 navController.navigate(Routes.rentalDetail(r.id))
                             }
                         }
@@ -166,9 +250,85 @@ fun RentalListScreen(navController: NavHostController, isAdmin: Boolean) {
     }
 }
 
+/** Kartu daftar penyewa untuk Admin: menampilkan nama orang penyewa; saat diklik baru mendetail barangnya. */
+@Composable
+private fun CustomerRentalGroupCard(group: CustomerRentalGroup, onClick: () -> Unit) {
+    val rep = group.representative
+    val hasBonus = group.rentals.any { it.bonusDays > 0 }
+    ListCard(onClick = onClick) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Filled.Person,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(26.dp),
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    group.customerName,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                StatusChip(rep.statusLabel(), rep.statusColor())
+            }
+            group.customerPhone?.takeIf { it.isNotBlank() && it != "-" }?.let { phone ->
+                Text(
+                    "HP: $phone",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                "${group.rentals.size} jenis barang (${group.totalUnits} unit) • Ketuk untuk detail barang",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.secondary,
+                fontWeight = FontWeight.Medium,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    formatRupiah(group.totalAmount),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (hasBonus) {
+                    Text(
+                        "🎁 Promo +1 Hari",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.secondary,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun RentalCard(rental: Rental, showCustomer: Boolean, onClick: () -> Unit) {
     ListCard(onClick = onClick) {
+        PhotoImage(
+            kind = PhotoStorage.KIND_EQUIPMENT,
+            id = rental.equipmentId,
+            serverPath = rental.equipmentPhoto,
+            modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)),
+        )
+        Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -177,6 +337,7 @@ fun RentalCard(rental: Rental, showCustomer: Boolean, onClick: () -> Unit) {
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 StatusChip(rental.statusLabel(), rental.statusColor())
             }
@@ -184,10 +345,18 @@ fun RentalCard(rental: Rental, showCustomer: Boolean, onClick: () -> Unit) {
                 Text(rental.customerName, style = MaterialTheme.typography.bodyMedium)
             }
             Text(
-                "${formatDisplayDate(rental.rentDate)} - ${formatDisplayDate(rental.dueDate)}  •  ${rental.quantity} unit",
+                "${formatDisplayDate(rental.rentDate)} - ${formatDisplayDate(rental.dueDate)}  •  ${rental.quantity} unit (${rental.days} hari)",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (rental.bonusDays > 0) {
+                Text(
+                    "🎁 Sudah termasuk Bonus +${rental.bonusDays} Hari Gratis dari Admin",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
             Text(
                 formatRupiah(rental.totalPrice + rental.lateFee),
                 style = MaterialTheme.typography.titleSmall,
@@ -198,215 +367,403 @@ fun RentalCard(rental: Rental, showCustomer: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** Detail Sewa: rincian biaya, denda, foto pengembalian, dan aksi Admin. */
+/**
+ * Detail Sewa:
+ * - Menampilkan informasi Orang Penyewa beserta seluruh rincian barang yang disewanya.
+ * - Setiap barang memiliki foto alat, rincian biaya/denda, tombol promo bonus +1 hari (Admin),
+ *   serta foto kondisi sebelum & sesudah sewa.
+ */
 @Composable
 fun RentalDetailScreen(
     id: Int,
     isAdmin: Boolean,
     onBack: () -> Unit,
-    onEdit: () -> Unit,
+    onEdit: (Int) -> Unit,
 ) {
     val vm = appViewModel(key = "rental_detail_$id") { RentalDetailViewModel(it.rentalRepository, id) }
     val state by vm.state.collectAsStateWithLifecycle()
+    val customerRentals by vm.customerRentals.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val deleted by vm.deleted.collectAsStateWithLifecycle()
     val photoVersion by vm.photoVersion.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val storage = (LocalContext.current.applicationContext as CampKuApp).container.photoStorage
-    var confirmDelete by remember { mutableStateOf(false) }
-    var confirmStatus by remember { mutableStateOf<String?>(null) }
+    var deleteTarget by remember { mutableStateOf<Rental?>(null) }
+    var statusTarget by remember { mutableStateOf<Pair<Rental, String>?>(null) }
 
     OnResume { vm.load() }
     MessageEffect(message, snackbar, vm::consumeMessage)
     LaunchedEffect(deleted) { if (deleted) onBack() }
 
-    val current = (state as? com.example.campku.ui.components.UiState.Success)?.data
-
     SubScreen(
-        title = "Detail Sewa",
+        title = if (isAdmin) "Detail Sewa Pelanggan" else "Detail Sewa",
         onBack = onBack,
         snackbarHostState = snackbar,
-        actions = {
-            if (isAdmin && current != null) {
-                if (current.status == RentalStatus.DIPESAN) {
-                    IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, "Ubah") }
-                }
-                IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Filled.Delete, "Hapus") }
-            }
-        },
     ) { padding ->
-        StateContent(state, onRetry = { vm.load(silent = false) }, modifier = Modifier.padding(padding)) { r ->
+        StateContent(state, onRetry = { vm.load(silent = false) }, modifier = Modifier.padding(padding)) { primary ->
+            val itemsToShow = if (isAdmin && customerRentals.isNotEmpty()) customerRentals else listOf(primary)
+            val grandTotal = itemsToShow.sumOf { it.totalPrice + it.lateFee }
+            val totalUnits = itemsToShow.sumOf { it.quantity }
+
             Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        r.equipmentName,
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
+                // 1. Kartu Ringkasan Orang Penyewa
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                ) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .background(MaterialTheme.colorScheme.primary, CircleShape),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Filled.Person,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                )
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    primary.customerName,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                )
+                                Text(
+                                    "No. HP: ${primary.customerPhone?.takeIf { it.isNotBlank() } ?: "-"}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f),
+                                )
+                            }
+                        }
+                        HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                        InfoRow("Total Jenis Barang", "${itemsToShow.size} jenis ($totalUnits unit)")
+                        InfoRow(
+                            "Total Tagihan Keseluruhan",
+                            formatRupiah(grandTotal),
+                            valueColor = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+
+                // 2. Banner Info Promo 2 Hari Jadi 3 Hari
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                ) {
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Filled.CardGiftcard,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary,
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            if (isAdmin) {
+                                "Promo Admin (Sewa 2 Hari Jadi 3 Hari): Tekan tombol 'Berikan Bonus +1 Hari' pada barang yang disewa minimal 2 hari untuk menambah 1 hari gratis."
+                            } else {
+                                "Promo Sewa 2 Hari Jadi 3 Hari: Penyewaan minimal 2 hari berhak mendapat bonus +1 hari gratis yang diaktifkan oleh Administrator."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
+                }
+
+                SectionTitle("Daftar Barang yang Disewa (${itemsToShow.size})")
+
+                // 3. Rincian Setiap Barang yang Disewa oleh Penyewa Tersebut
+                itemsToShow.forEachIndexed { index, r ->
+                    RentalEquipmentDetailCard(
+                        index = index + 1,
+                        r = r,
+                        isAdmin = isAdmin,
+                        busy = busy,
+                        photoVersion = photoVersion,
+                        storage = storage,
+                        onEdit = { onEdit(r.id) },
+                        onDelete = { deleteTarget = r },
+                        onApplyBonusDay = { vm.applyBonusDay(r.id) },
+                        onUploadPickupPhoto = { uri -> vm.uploadPickupPhoto(r.id, uri) },
+                        onUploadReturnPhoto = { uri -> vm.uploadReturnPhoto(r.id, uri) },
+                        onConfirmStatus = { nextStatus -> statusTarget = r to nextStatus },
                     )
-                    StatusChip(r.statusLabel(), r.statusColor())
-                }
-
-                if (r.isLate) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = StatusLate.copy(alpha = 0.12f)),
-                        modifier = Modifier.padding(vertical = 8.dp),
-                    ) {
-                        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.Warning, null, tint = StatusLate)
-                            Text(
-                                "Terlambat ${r.lateDays} hari. Denda berjalan ${formatRupiah(r.lateFee)}.",
-                                modifier = Modifier.padding(start = 12.dp),
-                                color = StatusLate,
-                                fontWeight = FontWeight.Medium,
-                            )
-                        }
-                    }
-                }
-
-                SectionTitle("Rincian Sewa")
-                if (isAdmin) {
-                    InfoRow("Pelanggan", r.customerName)
-                    InfoRow("No. HP", r.customerPhone ?: "-")
-                }
-                InfoRow("Jumlah", "${r.quantity} unit")
-                InfoRow("Tanggal sewa", formatDisplayDate(r.rentDate))
-                InfoRow("Tanggal kembali", formatDisplayDate(r.dueDate))
-                if (r.returnDate != null) InfoRow("Dikembalikan", formatDisplayDate(r.returnDate))
-                InfoRow("Durasi", "${r.days} hari")
-                r.processedByName?.let { InfoRow("Diproses oleh", it) }
-
-                SectionTitle("Biaya")
-                InfoRow("Harga / hari", formatRupiah(r.dailyPrice))
-                InfoRow("Biaya sewa", formatRupiah(r.totalPrice))
-                if (r.lateFee > 0 || r.isLate) {
-                    InfoRow("Denda", formatRupiah(r.lateFee), valueColor = StatusLate)
-                }
-                HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                InfoRow("Total", formatRupiah(r.totalPrice + r.lateFee), valueColor = MaterialTheme.colorScheme.primary)
-
-                // 1. Foto Kondisi Sebelum Disewa
-                val hasPickupPhoto = r.pickupPhotoPath != null ||
-                    storage.localFileOrNull(PhotoStorage.KIND_PICKUP, r.id) != null
-                if (isAdmin || hasPickupPhoto) {
-                    SectionTitle("Foto Kondisi Sebelum Disewa")
-                    if (hasPickupPhoto) {
-                        PhotoImage(
-                            kind = PhotoStorage.KIND_PICKUP,
-                            id = r.id,
-                            serverPath = r.pickupPhotoPath,
-                            version = photoVersion,
-                            modifier = Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(16.dp)),
-                        )
-                    } else {
-                        Text(
-                            "Belum ada foto kondisi sebelum disewa (wajib difoto sebelum alat diserahkan).",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                    if (isAdmin && r.status == RentalStatus.DIPESAN) {
-                        Spacer(Modifier.height(8.dp))
-                        PhotoPickerButtons(onPicked = vm::uploadPickupPhoto, enabled = !busy)
-                    }
-                }
-
-                // 2. Foto Kondisi Setelah Disewa (Saat Dikembalikan)
-                val hasReturnPhoto = r.returnPhotoPath != null ||
-                    storage.localFileOrNull(PhotoStorage.KIND_RETURN, r.id) != null
-                if ((isAdmin && r.status != RentalStatus.DIPESAN) || hasReturnPhoto) {
-                    SectionTitle("Foto Kondisi Setelah Disewa (Saat Dikembalikan)")
-                    if (hasReturnPhoto) {
-                        PhotoImage(
-                            kind = PhotoStorage.KIND_RETURN,
-                            id = r.id,
-                            serverPath = r.returnPhotoPath,
-                            version = photoVersion,
-                            modifier = Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(16.dp)),
-                        )
-                    } else {
-                        Text(
-                            "Belum ada foto kondisi setelah disewa (wajib difoto saat alat dikembalikan).",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                    if (isAdmin && r.status == RentalStatus.DISEWA) {
-                        Spacer(Modifier.height(8.dp))
-                        PhotoPickerButtons(onPicked = vm::uploadReturnPhoto, enabled = !busy)
-                    }
-                }
-
-                if (isAdmin) {
-                    Spacer(Modifier.height(16.dp))
-                    when (r.status) {
-                        RentalStatus.DIPESAN -> {
-                            if (!hasPickupPhoto) {
-                                Text(
-                                    "Ambil/unggah foto kondisi sebelum disewa terlebih dahulu untuk mengaktifkan tombol di bawah.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                            LoadingButton(
-                                "Mulai Sewa (Tandai Disewa)",
-                                onClick = { confirmStatus = RentalStatus.DISEWA },
-                                loading = busy,
-                                enabled = hasPickupPhoto,
-                            )
-                        }
-                        RentalStatus.DISEWA -> {
-                            if (!hasReturnPhoto) {
-                                Text(
-                                    "Ambil/unggah foto kondisi setelah disewa terlebih dahulu untuk mengaktifkan tombol di bawah.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                            LoadingButton(
-                                "Tandai Dikembalikan",
-                                onClick = { confirmStatus = RentalStatus.DIKEMBALIKAN },
-                                loading = busy,
-                                enabled = hasReturnPhoto,
-                            )
-                        }
-                        else -> {}
-                    }
                 }
             }
         }
     }
 
-    confirmStatus?.let { next ->
+    statusTarget?.let { (rental, next) ->
         val toRented = next == RentalStatus.DISEWA
         ConfirmDialog(
-            title = if (toRented) "Mulai sewa?" else "Tandai dikembalikan?",
+            title = if (toRented) "Mulai sewa ${rental.equipmentName}?" else "Tandai ${rental.equipmentName} dikembalikan?",
             message = if (toRented) {
                 "Foto kondisi sebelum disewa sudah tercatat. Status menjadi Disewa dan stok alat akan berkurang."
             } else {
                 "Foto kondisi setelah disewa sudah tercatat. Stok alat akan bertambah dan denda keterlambatan (jika ada) dihitung otomatis."
             },
             confirmText = "Ya, lanjutkan",
-            onConfirm = { vm.changeStatus(next); confirmStatus = null },
-            onDismiss = { confirmStatus = null },
+            onConfirm = { vm.changeStatus(rental.id, next); statusTarget = null },
+            onDismiss = { statusTarget = null },
         )
     }
-    if (confirmDelete) {
+    deleteTarget?.let { target ->
         ConfirmDialog(
-            title = "Hapus penyewaan?",
-            message = "Data penyewaan ini akan dihapus permanen. Jika masih berstatus Disewa, stok akan dikembalikan.",
+            title = "Hapus ${target.equipmentName}?",
+            message = "Data penyewaan barang ini akan dihapus permanen. Jika masih berstatus Disewa, stok akan dikembalikan.",
             confirmText = "Hapus",
-            onConfirm = { confirmDelete = false; vm.delete() },
-            onDismiss = { confirmDelete = false },
+            onConfirm = { vm.delete(target.id); deleteTarget = null },
+            onDismiss = { deleteTarget = null },
         )
     }
 }
 
-/** Form penyewaan (Admin memilih pelanggan; Penyewa otomatis untuk dirinya sendiri). */
+@Composable
+private fun RentalEquipmentDetailCard(
+    index: Int,
+    r: Rental,
+    isAdmin: Boolean,
+    busy: Boolean,
+    photoVersion: Int,
+    storage: PhotoStorage,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onApplyBonusDay: () -> Unit,
+    onUploadPickupPhoto: (android.net.Uri) -> Unit,
+    onUploadReturnPhoto: (android.net.Uri) -> Unit,
+    onConfirmStatus: (String) -> Unit,
+) {
+    val hasPickupPhoto = r.pickupPhotoPath != null ||
+        storage.localFileOrNull(PhotoStorage.KIND_PICKUP, r.id) != null
+    val hasReturnPhoto = r.returnPhotoPath != null ||
+        storage.localFileOrNull(PhotoStorage.KIND_RETURN, r.id) != null
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        elevation = CardDefaults.cardElevation(3.dp),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                PhotoImage(
+                    kind = PhotoStorage.KIND_EQUIPMENT,
+                    id = r.equipmentId,
+                    serverPath = r.equipmentPhoto,
+                    modifier = Modifier.size(72.dp).clip(RoundedCornerShape(14.dp)),
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Barang #$index",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        r.equipmentName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        "${formatRupiah(r.dailyPrice)}/hari × ${r.quantity} unit",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    StatusChip(r.statusLabel(), r.statusColor())
+                    if (isAdmin) {
+                        Row {
+                            if (r.status == RentalStatus.DIPESAN) {
+                                IconButton(onClick = onEdit) {
+                                    Icon(Icons.Filled.Edit, "Ubah", tint = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                            IconButton(onClick = onDelete) {
+                                Icon(Icons.Filled.Delete, "Hapus", tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (r.isLate) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = StatusLate.copy(alpha = 0.12f)),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Warning, null, tint = StatusLate)
+                        Text(
+                            "Terlambat ${r.lateDays} hari. Denda berjalan ${formatRupiah(r.lateFee)}.",
+                            modifier = Modifier.padding(start = 10.dp),
+                            color = StatusLate,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(Modifier.padding(vertical = 2.dp))
+            InfoRow("Tanggal Sewa", formatDisplayDate(r.rentDate))
+            InfoRow("Tanggal Kembali", formatDisplayDate(r.dueDate))
+            if (r.returnDate != null) InfoRow("Dikembalikan", formatDisplayDate(r.returnDate))
+            InfoRow(
+                "Durasi Sewa",
+                if (r.bonusDays > 0) "${r.days} hari (termasuk +${r.bonusDays} hari bonus promo)"
+                else "${r.days} hari",
+            )
+            r.processedByName?.let { InfoRow("Diproses oleh", it) }
+            InfoRow("Biaya Sewa", formatRupiah(r.totalPrice))
+            if (r.lateFee > 0 || r.isLate) {
+                InfoRow("Denda", formatRupiah(r.lateFee), valueColor = StatusLate)
+            }
+            InfoRow(
+                "Subtotal Barang",
+                formatRupiah(r.totalPrice + r.lateFee),
+                valueColor = MaterialTheme.colorScheme.primary,
+            )
+
+            // Status / Tombol Promo Bonus +1 Hari (Sewa 2 Hari Jadi 3 Hari)
+            if (r.bonusDays > 0) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.CheckCircle, null, tint = MaterialTheme.colorScheme.secondary)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "🎁 Promo Aktif: Sudah mendapat Bonus +${r.bonusDays} Hari Gratis dari Administrator!",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
+                }
+            } else if (isAdmin && r.status != RentalStatus.DIKEMBALIKAN && r.days >= 2) {
+                OutlinedButton(
+                    onClick = onApplyBonusDay,
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Filled.CardGiftcard, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("🎁 Berikan Bonus +1 Hari Gratis (Promo 2 Jadi 3 Hari)")
+                }
+            }
+
+            // 1. Foto Kondisi Sebelum Disewa
+            if (isAdmin || hasPickupPhoto) {
+                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                Text(
+                    "Foto Kondisi Sebelum Disewa",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (hasPickupPhoto) {
+                    PhotoImage(
+                        kind = PhotoStorage.KIND_PICKUP,
+                        id = r.id,
+                        serverPath = r.pickupPhotoPath,
+                        version = photoVersion,
+                        modifier = Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(14.dp)),
+                    )
+                } else {
+                    Text(
+                        "Belum ada foto kondisi sebelum disewa (wajib difoto sebelum alat diserahkan).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                if (isAdmin && r.status == RentalStatus.DIPESAN) {
+                    PhotoPickerButtons(onPicked = onUploadPickupPhoto, enabled = !busy)
+                }
+            }
+
+            // 2. Foto Kondisi Setelah Disewa (Saat Dikembalikan)
+            if ((isAdmin && r.status != RentalStatus.DIPESAN) || hasReturnPhoto) {
+                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                Text(
+                    "Foto Kondisi Setelah Disewa (Saat Dikembalikan)",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (hasReturnPhoto) {
+                    PhotoImage(
+                        kind = PhotoStorage.KIND_RETURN,
+                        id = r.id,
+                        serverPath = r.returnPhotoPath,
+                        version = photoVersion,
+                        modifier = Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(14.dp)),
+                    )
+                } else {
+                    Text(
+                        "Belum ada foto kondisi setelah disewa (wajib difoto saat alat dikembalikan).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                if (isAdmin && r.status == RentalStatus.DISEWA) {
+                    PhotoPickerButtons(onPicked = onUploadReturnPhoto, enabled = !busy)
+                }
+            }
+
+            if (isAdmin) {
+                when (r.status) {
+                    RentalStatus.DIPESAN -> {
+                        if (!hasPickupPhoto) {
+                            Text(
+                                "Ambil/unggah foto kondisi sebelum disewa terlebih dahulu untuk mengaktifkan tombol Mulai Sewa.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                        LoadingButton(
+                            "Mulai Sewa ${r.equipmentName}",
+                            onClick = { onConfirmStatus(RentalStatus.DISEWA) },
+                            loading = busy,
+                            enabled = hasPickupPhoto,
+                        )
+                    }
+                    RentalStatus.DISEWA -> {
+                        if (!hasReturnPhoto) {
+                            Text(
+                                "Ambil/unggah foto kondisi setelah disewa terlebih dahulu untuk mengaktifkan tombol Dikembalikan.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                        LoadingButton(
+                            "Tandai ${r.equipmentName} Dikembalikan",
+                            onClick = { onConfirmStatus(RentalStatus.DIKEMBALIKAN) },
+                            loading = busy,
+                            enabled = hasReturnPhoto,
+                        )
+                    }
+                    else -> {}
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Form penyewaan:
+ * - Memilih alat menggunakan katalog visual dengan FOTO dan detail nama/kategori/deskripsi/stok barang.
+ * - Menampilkan informasi promo Sewa 2 Hari Jadi 3 Hari untuk Penyewa, serta opsi aktivasi promo untuk Admin.
+ */
 @Composable
 fun RentalFormScreen(
     id: Int,
@@ -420,17 +777,22 @@ fun RentalFormScreen(
         )
     }
     val state by vm.state.collectAsStateWithLifecycle()
+    var activePickerIndex by remember { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(state.saved) { if (state.saved) onBack() }
 
-    SubScreen(title = if (vm.isEdit) "Ubah Sewa" else "Buat Sewa", onBack = onBack) { padding ->
+    SubScreen(title = if (vm.isEdit) "Ubah Sewa" else "Pengajuan Sewa Alat", onBack = onBack) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when {
                 state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                 state.loadError != null -> ErrorState(state.loadError!!, vm::load, Modifier.align(Alignment.Center))
                 else -> {
                     val equipmentMap = state.equipments.associateBy { it.id }
-                    val days = rentalDays(state.rentDate, state.dueDate)
+                    val baseDays = rentalDays(state.rentDate, state.dueDate)
+                    val eligibleForBonus = (baseDays ?: 0) >= 2
+                    val effectiveBonus = isAdmin && state.bonusDay && eligibleForBonus
+                    val finalDueDatePreview = if (effectiveBonus) addDaysIso(state.dueDate, 1) else state.dueDate
+
                     val validLines = state.items.mapNotNull { item ->
                         val eq = item.equipmentId?.let { equipmentMap[it] } ?: return@mapNotNull null
                         val qty = item.quantity.trim().toIntOrNull()?.takeIf { it > 0 } ?: return@mapNotNull null
@@ -441,11 +803,74 @@ fun RentalFormScreen(
 
                     Column(
                         modifier = Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
+                        // Info Promo Sewa 2 Hari Jadi 3 Hari
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                        ) {
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Filled.CardGiftcard,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.secondary,
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            "Promo Sewa 2 Hari Dapat Plus Jadi 3 Hari!",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        )
+                                        Text(
+                                            if (isAdmin) {
+                                                "Sebagai Administrator, Anda dapat mengaktifkan bonus +1 hari gratis untuk penyewaan minimal 2 hari."
+                                            } else {
+                                                "Sewa minimal 2 hari dapat bonus +1 hari gratis (total jadi 3 hari)! Bonus diberikan oleh Administrator saat verifikasi pesanan Anda."
+                                            },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        )
+                                    }
+                                }
+                                if (isAdmin) {
+                                    HorizontalDivider()
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(
+                                                "Berikan Bonus +1 Hari Gratis (Khusus Admin)",
+                                                style = MaterialTheme.typography.labelLarge,
+                                                fontWeight = FontWeight.SemiBold,
+                                            )
+                                            Text(
+                                                if (eligibleForBonus) {
+                                                    "Aktif: Tanggal kembali menjadi ${formatDisplayDate(finalDueDatePreview)} (bayar $baseDays hari, dapat ${(baseDays ?: 2) + 1} hari)"
+                                                } else {
+                                                    "Pilih durasi minimal 2 hari untuk mengaktifkan bonus +1 hari"
+                                                },
+                                                style = MaterialTheme.typography.bodySmall,
+                                            )
+                                        }
+                                        Switch(
+                                            checked = effectiveBonus,
+                                            onCheckedChange = { checked -> vm.update { copy(bonusDay = checked) } },
+                                            enabled = eligibleForBonus,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         if (isAdmin) {
                             DropdownField(
-                                label = "Pelanggan",
+                                label = "Pelanggan / Orang Penyewa",
                                 options = state.customers.map { it.id to "${it.name} (${it.phone})" },
                                 selectedId = state.customerId,
                                 onSelected = { c -> vm.update { copy(customerId = c) } },
@@ -460,53 +885,167 @@ fun RentalFormScreen(
                             }
                         }
 
-                        SectionTitle(if (vm.isEdit) "Alat yang Disewa" else "Daftar Alat yang Disewa")
+                        SectionTitle(if (vm.isEdit) "Barang yang Disewa" else "Pilih Barang Camping (Dengan Foto & Detail)")
                         state.items.forEachIndexed { index, item ->
+                            val selectedEq = item.equipmentId?.let { equipmentMap[it] }
+                            val eqError = state.errors["equipment_$index"]
+                            val qtyError = state.errors["quantity_$index"]
+
                             Card(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                ),
                             ) {
-                                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    if (!vm.isEdit && state.items.size > 1) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(
-                                                "Alat #${index + 1}",
-                                                modifier = Modifier.weight(1f),
-                                                style = MaterialTheme.typography.labelLarge,
-                                                fontWeight = FontWeight.SemiBold,
-                                            )
+                                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            "Barang #${index + 1}",
+                                            modifier = Modifier.weight(1f),
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                        if (!vm.isEdit && state.items.size > 1) {
                                             IconButton(onClick = { vm.removeItem(index) }) {
-                                                Icon(Icons.Filled.Delete, "Hapus alat", tint = MaterialTheme.colorScheme.error)
+                                                Icon(
+                                                    Icons.Filled.Delete,
+                                                    "Hapus barang",
+                                                    tint = MaterialTheme.colorScheme.error,
+                                                )
                                             }
                                         }
                                     }
-                                    DropdownField(
-                                        label = "Pilih Alat",
-                                        options = state.equipments.map {
-                                            it.id to "${it.name} - ${formatRupiah(it.dailyPrice)}/hari (stok ${it.stock})"
-                                        },
-                                        selectedId = item.equipmentId,
-                                        onSelected = { e -> vm.updateItem(index) { copy(equipmentId = e) } },
-                                        error = state.errors["equipment_$index"],
-                                    )
-                                    AppTextField(
-                                        item.quantity,
-                                        { v -> vm.updateItem(index) { copy(quantity = v.filter(Char::isDigit)) } },
-                                        "Jumlah unit",
-                                        error = state.errors["quantity_$index"],
-                                        keyboardType = KeyboardType.Number,
-                                    )
+
+                                    if (selectedEq != null) {
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable { activePickerIndex = index },
+                                            shape = RoundedCornerShape(14.dp),
+                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                PhotoImage(
+                                                    kind = PhotoStorage.KIND_EQUIPMENT,
+                                                    id = selectedEq.id,
+                                                    serverPath = selectedEq.photoPath,
+                                                    modifier = Modifier.size(84.dp).clip(RoundedCornerShape(12.dp)),
+                                                )
+                                                Spacer(Modifier.width(12.dp))
+                                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                                    selectedEq.categoryName?.let { cat ->
+                                                        Text(
+                                                            cat,
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.secondary,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                        )
+                                                    }
+                                                    Text(
+                                                        selectedEq.name,
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                    )
+                                                    selectedEq.description?.takeIf { it.isNotBlank() }?.let { desc ->
+                                                        Text(
+                                                            desc,
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            maxLines = 2,
+                                                            overflow = TextOverflow.Ellipsis,
+                                                        )
+                                                    }
+                                                    Text(
+                                                        "${formatRupiah(selectedEq.dailyPrice)} / hari  •  Stok: ${selectedEq.stock} unit",
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        color = MaterialTheme.colorScheme.primary,
+                                                        fontWeight = FontWeight.Bold,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        OutlinedButton(
+                                            onClick = { activePickerIndex = index },
+                                            modifier = Modifier.fillMaxWidth(),
+                                        ) {
+                                            Icon(Icons.Filled.ShoppingBag, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(Modifier.width(8.dp))
+                                            Text("Ganti Barang Lain (Lihat Foto Katalog)")
+                                        }
+                                    } else {
+                                        Button(
+                                            onClick = { activePickerIndex = index },
+                                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                                            shape = RoundedCornerShape(14.dp),
+                                        ) {
+                                            Icon(Icons.Filled.ShoppingBag, contentDescription = null)
+                                            Spacer(Modifier.width(8.dp))
+                                            Text("Pilih Barang Camping (Lihat Foto & Detail)")
+                                        }
+                                    }
+
+                                    if (eqError != null) {
+                                        Text(
+                                            eqError,
+                                            color = MaterialTheme.colorScheme.error,
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    }
+
+                                    // Kontrol Jumlah Unit
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        val currentQty = item.quantity.trim().toIntOrNull() ?: 1
+                                        OutlinedButton(
+                                            onClick = {
+                                                val next = (currentQty - 1).coerceAtLeast(1)
+                                                vm.updateItem(index) { copy(quantity = next.toString()) }
+                                            },
+                                            contentPadding = PaddingValues(0.dp),
+                                            modifier = Modifier.size(44.dp),
+                                        ) {
+                                            Icon(Icons.Filled.Remove, "Kurangi")
+                                        }
+                                        Box(Modifier.weight(1f)) {
+                                            AppTextField(
+                                                value = item.quantity,
+                                                onValueChange = { v ->
+                                                    vm.updateItem(index) { copy(quantity = v.filter(Char::isDigit)) }
+                                                },
+                                                label = "Jumlah unit disewa",
+                                                error = qtyError,
+                                                keyboardType = KeyboardType.Number,
+                                            )
+                                        }
+                                        OutlinedButton(
+                                            onClick = {
+                                                val maxStock = selectedEq?.stock ?: 99
+                                                val next = (currentQty + 1).coerceAtMost(maxStock.coerceAtLeast(1))
+                                                vm.updateItem(index) { copy(quantity = next.toString()) }
+                                            },
+                                            contentPadding = PaddingValues(0.dp),
+                                            modifier = Modifier.size(44.dp),
+                                        ) {
+                                            Icon(Icons.Filled.Add, "Tambah")
+                                        }
+                                    }
                                 }
                             }
                         }
 
                         if (!vm.isEdit) {
-                            androidx.compose.material3.OutlinedButton(
+                            OutlinedButton(
                                 onClick = vm::addItem,
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Icon(Icons.Filled.Add, null)
-                                Text("  Tambah Alat Lain")
+                                Text("  Tambah Barang Lain Sekaligus")
                             }
                         }
 
@@ -522,38 +1061,65 @@ fun RentalFormScreen(
 
                         Card(
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                            modifier = Modifier.padding(vertical = 8.dp),
+                            modifier = Modifier.padding(vertical = 4.dp),
                         ) {
-                            Column(Modifier.padding(16.dp)) {
-                                Text("Perkiraan Biaya", style = MaterialTheme.typography.labelLarge)
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("Ringkasan & Perkiraan Biaya", style = MaterialTheme.typography.labelLarge)
                                 Text(
                                     if (grandTotal != null) formatRupiah(grandTotal) else "-",
                                     style = MaterialTheme.typography.headlineSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary,
                                 )
-                                if (days != null && validLines.isNotEmpty()) {
+                                if (baseDays != null && validLines.isNotEmpty()) {
                                     validLines.forEach { (eq, qty, sub) ->
                                         Text(
-                                            "• ${eq.name}: $days hari × ${formatRupiah(eq.dailyPrice)} × $qty = ${formatRupiah(sub)}",
+                                            "• ${eq.name}: $baseDays hari × ${formatRupiah(eq.dailyPrice)} × $qty unit = ${formatRupiah(sub)}",
                                             style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    }
+                                    if (effectiveBonus) {
+                                        Text(
+                                            "🎁 Bonus Admin Aktif: +1 Hari Gratis (Total durasi ${baseDays + 1} hari, kembali ${formatDisplayDate(finalDueDatePreview)})",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.secondary,
+                                        )
+                                    } else if (!isAdmin && baseDays >= 2) {
+                                        Text(
+                                            "🎁 Memenuhi syarat Promo Sewa ≥ 2 Hari: berhak mendapat bonus +1 hari gratis dari Administrator!",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.secondary,
                                         )
                                     }
                                 }
                                 Text(
                                     "Denda keterlambatan: 10% dari harga sewa per hari.",
                                     style = MaterialTheme.typography.bodySmall,
-                                    modifier = Modifier.padding(top = 4.dp),
                                 )
                             }
                         }
 
                         state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(6.dp))
                         LoadingButton(
-                            if (vm.isEdit) "Simpan Perubahan" else "Buat Sewa",
+                            if (vm.isEdit) "Simpan Perubahan" else "Ajukan Penyewaan",
                             onClick = vm::save,
                             loading = state.saving,
+                        )
+                    }
+
+                    // Dialog Katalog Pilih Alat dengan Foto & Detail Barang
+                    activePickerIndex?.let { rowIndex ->
+                        EquipmentPhotoPickerDialog(
+                            equipments = state.equipments,
+                            selectedId = state.items.getOrNull(rowIndex)?.equipmentId,
+                            onSelect = { eq ->
+                                vm.updateItem(rowIndex) { copy(equipmentId = eq.id) }
+                                activePickerIndex = null
+                            },
+                            onDismiss = { activePickerIndex = null },
                         )
                     }
                 }
@@ -561,3 +1127,133 @@ fun RentalFormScreen(
         }
     }
 }
+
+/**
+ * Dialog visual pemilihan alat camping dengan Foto, Nama Barang Detail, Kategori, Deskripsi, Harga, dan Stok.
+ */
+@Composable
+private fun EquipmentPhotoPickerDialog(
+    equipments: List<Equipment>,
+    selectedId: Int?,
+    onSelect: (Equipment) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var query by remember { mutableStateOf("") }
+    val filtered = remember(equipments, query) {
+        val q = query.trim().lowercase()
+        if (q.isEmpty()) equipments
+        else equipments.filter {
+            it.name.lowercase().contains(q) ||
+                it.categoryName?.lowercase()?.contains(q) == true ||
+                it.description?.lowercase()?.contains(q) == true
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                "Pilih Barang Camping",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                SearchField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = "Cari nama atau kategori barang...",
+                )
+                if (filtered.isEmpty()) {
+                    Text(
+                        "Barang tidak ditemukan.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        items(filtered, key = { it.id }) { eq ->
+                            val isSelected = eq.id == selectedId
+                            val outOfStock = eq.stock <= 0
+                            Card(
+                                onClick = { if (!outOfStock) onSelect(eq) },
+                                enabled = !outOfStock,
+                                shape = RoundedCornerShape(14.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isSelected) {
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                                    },
+                                ),
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    PhotoImage(
+                                        kind = PhotoStorage.KIND_EQUIPMENT,
+                                        id = eq.id,
+                                        serverPath = eq.photoPath,
+                                        modifier = Modifier.size(76.dp).clip(RoundedCornerShape(12.dp)),
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        eq.categoryName?.let { cat ->
+                                            Text(
+                                                cat,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.secondary,
+                                                fontWeight = FontWeight.SemiBold,
+                                            )
+                                        }
+                                        Text(
+                                            eq.name,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                        eq.description?.takeIf { it.isNotBlank() }?.let { desc ->
+                                            Text(
+                                                desc,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Text(
+                                                "${formatRupiah(eq.dailyPrice)}/hari",
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Bold,
+                                            )
+                                            StatusChip(
+                                                text = if (outOfStock) "Habis" else "Stok ${eq.stock}",
+                                                color = if (outOfStock) StatusLate else StatusReturned,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Tutup") }
+        },
+    )
+}
+

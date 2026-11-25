@@ -142,7 +142,7 @@ fun AppNavHost(sessionState: SessionState) {
                     id = id,
                     isAdmin = it.isAdmin,
                     onBack = { navController.popBackStack() },
-                    onEdit = { navController.navigate(Routes.rentalForm(id)) },
+                    onEdit = { targetId -> navController.navigate(Routes.rentalForm(targetId)) },
                 )
             }
         }

@@ -10,6 +10,7 @@ import com.example.campku.data.model.EquipmentRequest
 import com.example.campku.data.model.LoginRequest
 import com.example.campku.data.model.LoginResponse
 import com.example.campku.data.model.MessageResponse
+import com.example.campku.data.model.ProfileUpdateRequest
 import com.example.campku.data.model.RegisterRequest
 import com.example.campku.data.model.Rental
 import com.example.campku.data.model.RentalRequest
@@ -43,6 +44,9 @@ interface ApiService {
 
     @GET("api/auth/me")
     suspend fun me(): User
+
+    @PUT("api/auth/me")
+    suspend fun updateProfile(@Body body: ProfileUpdateRequest): User
 
     // ----- Alat -----
     @GET("api/equipments")
@@ -120,6 +124,9 @@ interface ApiService {
 
     @PATCH("api/rentals/{id}/status")
     suspend fun updateRentalStatus(@Path("id") id: Int, @Body body: StatusRequest): Rental
+
+    @POST("api/rentals/{id}/bonus-day")
+    suspend fun applyBonusDay(@Path("id") id: Int): Rental
 
     @Multipart
     @POST("api/rentals/{id}/pickup-photo")

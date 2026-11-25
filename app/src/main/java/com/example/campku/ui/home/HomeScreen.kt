@@ -20,8 +20,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.ManageAccounts
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Warning
@@ -29,6 +31,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -73,7 +76,8 @@ fun HomeScreen(navController: NavHostController, user: User) {
         StateContent(state, onRetry = { vm.load(silent = false) }, modifier = Modifier.padding(padding)) { data ->
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 Greeting(user)
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PromoBanner(isAdmin = isAdmin)
                     SectionTitle(if (isAdmin) "Ringkasan Dashboard" else "Ringkasan Sewa Saya")
                     SummaryGrid(data.summary, isAdmin)
                     Spacer(Modifier.height(4.dp))
@@ -82,7 +86,17 @@ fun HomeScreen(navController: NavHostController, user: User) {
                         onClick = { navController.navigate(Routes.rentalForm()) },
                         loading = false,
                     )
-                    Spacer(Modifier.height(8.dp))
+                    if (isAdmin) {
+                        OutlinedButton(
+                            onClick = { navController.navigate(Routes.USERS) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(Icons.Filled.ManageAccounts, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Kelola Akun Pengguna (${data.summary.totalCustomers} Pelanggan)")
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
                     SectionTitle("Alat Populer")
                 }
                 if (data.popular.isEmpty()) {
@@ -133,6 +147,55 @@ fun HomeScreen(navController: NavHostController, user: User) {
                     }
                 }
                 Spacer(Modifier.height(24.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun PromoBanner(isAdmin: Boolean) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        ),
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.CardGiftcard,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.size(26.dp),
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "Promo Spesial: Sewa 2 Hari Jadi 3 Hari!",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+                Text(
+                    if (isAdmin) {
+                        "Admin dapat memberikan bonus +1 hari gratis untuk penyewaan minimal 2 hari melalui menu Detail Sewa atau Form Sewa."
+                    } else {
+                        "Sewa alat minimal 2 hari dapat bonus +1 hari gratis (total jadi 3 hari tanpa biaya tambahan)! Bonus diberikan oleh Administrator saat pesanan diverifikasi."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.9f),
+                )
             }
         }
     }
