@@ -31,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -50,6 +51,7 @@ private fun BrandHeader(subtitle: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(bottomStart = 36.dp, bottomEnd = 36.dp))
             .background(
                 Brush.verticalGradient(
                     listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)),

@@ -1,6 +1,7 @@
 package com.example.campku.ui.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +40,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -187,8 +189,20 @@ fun SearchField(
         },
         singleLine = true,
         shape = RoundedCornerShape(28.dp),
+        colors = appFieldColors(),
     )
 }
+
+/** Warna field seragam: latar putih, garis tipis, fokus hijau. */
+@Composable
+fun appFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedContainerColor = MaterialTheme.colorScheme.surface,
+    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+    disabledContainerColor = MaterialTheme.colorScheme.surface,
+    errorContainerColor = MaterialTheme.colorScheme.surface,
+    focusedBorderColor = MaterialTheme.colorScheme.primary,
+    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+)
 
 @Composable
 fun AppTextField(
@@ -226,6 +240,8 @@ fun AppTextField(
         singleLine = singleLine,
         minLines = minLines,
         enabled = enabled,
+        shape = RoundedCornerShape(14.dp),
+        colors = appFieldColors(),
     )
 }
 
@@ -357,9 +373,10 @@ fun LoadingButton(
     Button(
         onClick = onClick,
         enabled = enabled && !loading,
+        shape = RoundedCornerShape(14.dp),
         modifier = modifier
             .fillMaxWidth()
-            .height(50.dp),
+            .height(52.dp),
     ) {
         if (loading) {
             CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
@@ -413,13 +430,24 @@ fun InfoRow(label: String, value: String, modifier: Modifier = Modifier, valueCo
 
 @Composable
 fun SectionTitle(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text,
-        modifier = modifier.padding(vertical = 8.dp),
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary,
-    )
+    Row(
+        modifier = modifier.padding(top = 10.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .width(4.dp)
+                .height(18.dp)
+                .background(MaterialTheme.colorScheme.secondary, RoundedCornerShape(2.dp)),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
 }
 
 @Composable

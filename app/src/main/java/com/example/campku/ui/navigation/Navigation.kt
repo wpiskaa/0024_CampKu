@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -169,13 +170,18 @@ private fun AppBottomBar(navController: NavHostController, isAdmin: Boolean) {
     val tabs = if (isAdmin) adminTabs else userTabs
     val homeRoute = Routes.home(isAdmin)
 
-    Surface(tonalElevation = 3.dp, shadowElevation = 10.dp, color = MaterialTheme.colorScheme.surface) {
+    Surface(
+        shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
+        tonalElevation = 0.dp,
+        shadowElevation = 16.dp,
+        color = MaterialTheme.colorScheme.surface,
+    ) {
         Row(
             modifier = Modifier
                 .navigationBarsPadding()
                 .fillMaxWidth()
-                .height(74.dp)
-                .padding(horizontal = 4.dp),
+                .height(72.dp)
+                .padding(horizontal = 6.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -210,42 +216,53 @@ private fun BottomItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val tint = when {
-        isCenter && selected -> MaterialTheme.colorScheme.onPrimary
-        isCenter -> MaterialTheme.colorScheme.primary
-        selected -> MaterialTheme.colorScheme.primary
+    val primary = MaterialTheme.colorScheme.primary
+    // Hanya tab yang sedang aktif yang disorot; Beranda (tengah) hanya sedikit lebih besar.
+    val iconTint = when {
+        selected && isCenter -> MaterialTheme.colorScheme.onPrimary
+        selected -> primary
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     val pillColor = when {
-        isCenter && selected -> MaterialTheme.colorScheme.primary
-        isCenter -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f)
+        selected && isCenter -> primary
         selected -> MaterialTheme.colorScheme.primaryContainer
         else -> Color.Transparent
     }
     Column(
         modifier = modifier
-            .clickable(onClick = onClick)
+            .clickable(
+                interactionSource = androidx.compose.runtime.remember {
+                    androidx.compose.foundation.interaction.MutableInteractionSource()
+                },
+                indication = null,
+                onClick = onClick,
+            )
             .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
         Surface(
-            shape = RoundedCornerShape(if (isCenter) 20.dp else 16.dp),
+            shape = RoundedCornerShape(if (isCenter) 18.dp else 14.dp),
             color = pillColor,
-            shadowElevation = if (isCenter) 3.dp else 0.dp,
+            shadowElevation = if (selected && isCenter) 4.dp else 0.dp,
         ) {
             Icon(
                 icon,
                 contentDescription = label,
-                tint = tint,
+                tint = iconTint,
                 modifier = Modifier
-                    .padding(horizontal = if (isCenter) 18.dp else 12.dp, vertical = if (isCenter) 6.dp else 4.dp)
-                    .size(if (isCenter) 24.dp else 21.dp),
+                    .padding(
+                        horizontal = if (isCenter) 22.dp else 16.dp,
+                        vertical = if (isCenter) 6.dp else 7.dp,
+                    )
+                    .size(if (isCenter) 24.dp else 22.dp),
             )
         }
         Text(
             label,
             style = MaterialTheme.typography.labelSmall,
-            color = if (selected || isCenter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = if (selected) primary else MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 2.dp),

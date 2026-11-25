@@ -1,6 +1,6 @@
 package com.example.campku.ui.components
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,7 +22,7 @@ fun OnResume(action: () -> Unit) {
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { action() }
 }
 
-/** Kartu item daftar yang dapat diklik. */
+/** Kartu item daftar yang dapat diklik: putih bersih, sudut membulat, garis tipis dan bayangan halus. */
 @Composable
 fun ListCard(
     onClick: () -> Unit,
@@ -30,18 +30,17 @@ fun ListCard(
     content: @Composable RowScope.() -> Unit,
 ) {
     Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
             content = content,
         )
     }
 }
-

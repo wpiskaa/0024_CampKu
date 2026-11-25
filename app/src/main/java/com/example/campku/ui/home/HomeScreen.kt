@@ -206,8 +206,9 @@ private fun Greeting(user: User) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
             .background(MaterialTheme.colorScheme.primary)
-            .padding(start = 20.dp, end = 20.dp, bottom = 24.dp, top = 8.dp),
+            .padding(start = 20.dp, end = 20.dp, bottom = 28.dp, top = 8.dp),
     ) {
         Column {
             Text(
