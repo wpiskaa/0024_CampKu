@@ -4,7 +4,7 @@ Aplikasi Android untuk mengelola rental alat camping: katalog alat, stok, penyew
 
 - **Android**: Kotlin, Jetpack Compose (Material 3), Navigation Compose, MVVM (ViewModel + StateFlow + Repository), Retrofit + OkHttp, Coil, DataStore, ZXing (QR Generator & Portrait Scanner). Tanpa XML layout dan tanpa Room.
 - **Backend**: Node.js, Express, MySQL, bcrypt, JSON Web Token, multer.
-- Dokumen kebutuhan: [`docs/SRS CampKu - Sistem Rental Alat Camping.docx`](docs/SRS%20CampKu%20-%20Sistem%20Rental%20Alat%20Camping.docx) · [`docs/SRS_CampKu.pdf`](docs/SRS_CampKu.pdf)
+- Dokumen kebutuhan: [`docs/SRS_CampKu.pdf`](docs/SRS_CampKu.pdf)
 
 ## Struktur Proyek
 

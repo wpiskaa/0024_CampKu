@@ -17,4 +17,5 @@ backend/uploads/*
 !backend/uploads/equipments/
 backend/uploads/equipments/*
 !backend/uploads/equipments/seed-*.jpg
+SRS CampKu - Sistem Rental Alat Camping.docx
 
