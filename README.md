@@ -2,7 +2,7 @@
 
 Aplikasi Android untuk mengelola rental alat camping: katalog alat, stok, penyewaan, pengembalian, dan denda keterlambatan.
 
-- **Android**: Kotlin, Jetpack Compose (Material 3), Navigation Compose, MVVM (ViewModel + StateFlow + Repository), Retrofit + OkHttp, Coil, DataStore. Tanpa XML layout dan tanpa Room.
+- **Android**: Kotlin, Jetpack Compose (Material 3), Navigation Compose, MVVM (ViewModel + StateFlow + Repository), Retrofit + OkHttp, Coil, DataStore, ZXing (QR Generator & Portrait Scanner). Tanpa XML layout dan tanpa Room.
 - **Backend**: Node.js, Express, MySQL, bcrypt, JSON Web Token, multer.
 - Dokumen kebutuhan: [`docs/SRS CampKu - Sistem Rental Alat Camping.docx`](docs/SRS%20CampKu%20-%20Sistem%20Rental%20Alat%20Camping.docx) · [`docs/SRS_CampKu.pdf`](docs/SRS_CampKu.pdf)
 
@@ -75,13 +75,17 @@ Uji logika biaya/denda: `npm test`
 ## Alur Status Sewa
 
 ```
-Dipesan ──(Admin: Foto Sebelum Sewa + Mulai Sewa, stok berkurang)──▶ Disewa ──(Admin: Foto Pengembalian + Dikembalikan, stok bertambah, denda dihitung)──▶ Dikembalikan
+Dipesan ──(Admin: Verifikasi QR/Kode Booking* + Foto Sebelum Sewa + Mulai Sewa, stok berkurang)──▶ Disewa ──(Admin: Foto Pengembalian + Dikembalikan, stok bertambah, denda dihitung)──▶ Dikembalikan
                                                                         │
                                                                         └─ lewat tanggal kembali ⇒ penanda "Terlambat" otomatis
 ```
+*\*Verifikasi QR / Kode Booking wajib untuk pesanan yang diajukan Penyewa melalui aplikasi; penyewaan yang diinput manual oleh Admin/Kasir otomatis terverifikasi.*
 
-- **Pilih banyak alat sekaligus dengan katalog foto**: Saat membuat penyewaan baru, pengguna/admin dapat memilih beberapa jenis alat sekaligus melalui dialog katalog visual (foto, nama detail, kategori, harga, stok).
-- **Pemisahan riwayat per Tanggal / Bulan / Tahun**: Di halaman **Sewa Saya** (Penyewa) dan **Daftar Penyewa** (Admin), transaksi di hari yang berbeda dipisahkan berdasarkan tanggal sewa agar tidak tercampur.
+- **Pilih banyak alat sekaligus & Paket Otomatis**: Saat membuat penyewaan baru, pengguna/admin dapat memilih beberapa jenis alat sekaligus melalui dialog katalog visual maupun menggunakan fitur **Paket Otomatis** (input angka manual jumlah orang & durasi), dilengkapi dialog konfirmasi yang langsung mengarahkan ke Detail Sewa.
+- **QR Booking Pass, Struk Digital & Bagikan WhatsApp**: Setiap penyewaan memiliki QR Booking Pass (`CK-...`) dan Struk Digital yang bisa langsung dibagikan ke WhatsApp. Admin dapat memindai QR (mode Portrait) atau input kode booking manual untuk verifikasi wajib sebelum transaksi dilanjutkan.
+- **Pemisahan riwayat per Tanggal / Bulan / Tahun (2 Tingkat)**: Di halaman **Sewa Saya** (Penyewa) dan **Daftar Penyewa** (Admin), transaksi ditampilkan dalam daftar vertikal per tanggal/bulan/tahun sebelum membuka detail alat agar rapi dan tidak tercampur.
+- **Notifikasi In-App & Laporan Pendapatan**: Admin dan Penyewa mendapatkan notifikasi in-app terkait pembaruan status, validasi, dan keterlambatan; Admin juga memiliki Laporan Pendapatan dengan grafik 6 bulan terakhir.
+- **Orientasi Layar Portrait**: Seluruh layar aplikasi dan kamera pemindai QR dikunci pada orientasi Portrait.
 - **Sistem Diskon & Bonus Hari (Admin)**: Admin dapat memberikan potongan diskon (`0%–100%`) maupun bonus `+1` hari gratis (untuk sewa minimal 2 hari) melalui Form Sewa atau Detail Sewa.
 - **Wajib dokumentasi foto sebelum & sesudah sewa**: Perubahan status `Dipesan -> Disewa` mewajibkan foto kondisi alat sebelum disewa (`pickup_photo_path`), dan `Disewa -> Dikembalikan` mewajibkan foto kondisi alat saat dikembalikan (`return_photo_path`).
 - **Biaya sewa** = jumlah hari × harga sewa per hari × jumlah alat − diskon (sewa dan kembali di hari yang sama dihitung 1 hari).
@@ -102,7 +106,7 @@ erDiagram
     categories { int id PK  string name UK  string description }
     equipments { int id PK  int category_id FK  string name  int daily_price  int stock  text description  string photo_path }
     customers { int id PK  int user_id FK  string name  string phone  string address  string id_number }
-    rentals { int id PK  int customer_id FK  int equipment_id FK  int processed_by FK  int quantity  date rent_date  date due_date  date return_date  int total_price  int discount_percent  int bonus_days  int late_fee  enum status  string pickup_photo_path  string return_photo_path  timestamp created_at }
+    rentals { int id PK  int customer_id FK  int equipment_id FK  int processed_by FK  int quantity  date rent_date  date due_date  date return_date  int total_price  int discount_percent  int bonus_days  int late_fee  enum status  boolean booking_verified  string pickup_photo_path  string return_photo_path  timestamp created_at }
 ```
 
 ## Daftar Endpoint REST API
@@ -130,10 +134,11 @@ Semua endpoint selain register, login, dan refresh wajib header `Authorization: 
 | POST, PUT, DELETE | `/api/customers(/:id)` | Tambah, ubah, hapus pelanggan | Admin |
 | GET | `/api/rentals?search=&status=` | Daftar sewa (cari nama/alat/kode booking; Penyewa hanya miliknya) | Login |
 | GET | `/api/rentals/code/:code` | Cari & verifikasi penyewaan berdasarkan Kode Booking (`CK-...`) | Login |
+| POST | `/api/rentals/:id/verify-booking` | Verifikasi wajib QR / Kode Booking untuk pesanan dari aplikasi | Admin |
 | GET | `/api/rentals/:id` | Detail sewa | Login |
 | POST | `/api/rentals` | Buat penyewaan (status awal Dipesan) | Login |
 | PUT | `/api/rentals/:id` | Ubah penyewaan (hanya status Dipesan) | Admin |
-| PATCH | `/api/rentals/:id/status` | Ubah status, stok otomatis, hitung denda (wajib foto) | Admin |
+| PATCH | `/api/rentals/:id/status` | Ubah status, stok otomatis, hitung denda (wajib verifikasi QR/kode & foto) | Admin |
 | POST | `/api/rentals/:id/discount` | Terapkan potongan diskon (0–100%) pada sewa | Admin |
 | POST | `/api/rentals/:id/bonus-day` | Berikan bonus +1 hari gratis (sewa min. 2 hari) | Admin |
 | POST | `/api/rentals/:id/pickup-photo` | Unggah foto kondisi alat sebelum disewa | Admin |
@@ -144,6 +149,7 @@ Semua endpoint selain register, login, dan refresh wajib header `Authorization: 
 | POST, PUT, DELETE | `/api/users(/:id)` | Tambah, ubah, hapus pengguna | Admin |
 | GET | `/api/dashboard` | Ringkasan dashboard laporan | Admin |
 | GET | `/api/dashboard/reports` | Laporan pendapatan, grafik 6 bulan & top alat menguntungkan | Admin |
+| GET | `/api/notifications` | Notifikasi in-app untuk Admin dan Penyewa | Login |
 
 Nilai `status` untuk filter: `dipesan`, `disewa`, `dikembalikan`, `terlambat`.
 
