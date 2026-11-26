@@ -178,12 +178,13 @@ fun copyToClipboard(context: Context, label: String, text: String) {
     Toast.makeText(context, "$label disalin: $text", Toast.LENGTH_SHORT).show()
 }
 
-/** Kartu Tiket Booking Pass (QR Code + Kode Booking + Tombol Nota Digital & Kirim WA). */
+/** Kartu Tiket Booking Pass (QR Code untuk Penyewa; Arsip Kode & Nota untuk Admin setelah verifikasi). */
 @Composable
 fun BookingPassCard(
     primary: Rental,
     items: List<Rental>,
     onOpenReceipt: () -> Unit,
+    showQrCode: Boolean = true,
 ) {
     val context = LocalContext.current
     val code = primary.displayBookingCode
@@ -196,11 +197,13 @@ fun BookingPassCard(
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                QrCodeImage(content = code, size = 96.dp)
-                Spacer(Modifier.width(14.dp))
+                if (showQrCode) {
+                    QrCodeImage(content = code, size = 96.dp)
+                    Spacer(Modifier.width(14.dp))
+                }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        "KARTU TIKET / BOOKING PASS",
+                        if (showQrCode) "KARTU TIKET / BOOKING PASS" else "KODE BOOKING TERVERIFIKASI",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.secondary,
@@ -227,7 +230,11 @@ fun BookingPassCard(
                         }
                     }
                     Text(
-                        "Tunjukkan QR / kode ini saat pengambilan & pengembalian alat.",
+                        if (showQrCode) {
+                            "Tunjukkan QR / kode ini saat pengambilan & pengembalian alat."
+                        } else {
+                            "Kode booking telah terverifikasi. Nota digital siap dilihat atau dikirim ke penyewa."
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

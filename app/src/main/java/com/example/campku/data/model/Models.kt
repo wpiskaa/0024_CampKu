@@ -141,11 +141,11 @@ data class Rental(
     @SerializedName("discount_amount") val discountAmount: Int = 0,
     @SerializedName("is_late") val isLate: Boolean = false,
     @SerializedName("late_days") val lateDays: Int = 0,
-    @SerializedName("booking_code") val bookingCode: String = "",
+    @SerializedName("booking_code") val bookingCode: String? = null,
     @SerializedName("booking_verified") val bookingVerified: Boolean = false,
 ) {
     val displayBookingCode: String
-        get() = bookingCode.ifBlank { "CK-${rentDate.replace("-", "")}-${id.toString().padStart(4, '0')}" }
+        get() = bookingCode.orEmpty().ifBlank { "CK-${rentDate.replace("-", "")}-${id.toString().padStart(4, '0')}" }
 }
 
 data class RentalRequest(

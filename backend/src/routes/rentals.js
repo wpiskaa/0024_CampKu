@@ -25,7 +25,7 @@ const SELECT = `SELECT r.id, r.customer_id, c.name AS customer_name, c.phone AS 
 const STATUSES = ['dipesan', 'disewa', 'dikembalikan'];
 
 /** Mengambil sewa; penyewa hanya boleh melihat miliknya sendiri. */
-async function findOr404(id, user, conn = pool) {
+async function findOr404(id, user, conn = pool, options = {}) {
   const [rows] = await conn.query(`${SELECT} WHERE r.id = ?`, [id]);
   const row = rows[0];
   if (!row) throw new HttpError(404, 'Penyewaan tidak ditemukan');
@@ -33,7 +33,8 @@ async function findOr404(id, user, conn = pool) {
     const [own] = await conn.query('SELECT 1 FROM customers WHERE id = ? AND user_id = ?', [row.customer_id, user.id]);
     if (!own.length) throw new HttpError(403, 'Anda hanya dapat melihat penyewaan milik Anda sendiri');
   }
-  return decorateRental(row);
+  const hideUnverifiedCode = Boolean(user && user.role === 'admin' && !options.revealCode);
+  return decorateRental(row, { hideUnverifiedCode });
 }
 
 /** Validasi input form sewa (FR-13) dan hitung biaya (FR-09). */
@@ -128,7 +129,8 @@ router.get('/', asyncHandler(async (req, res) => {
 
   const sql = `${SELECT}${where.length ? ' WHERE ' + where.join(' AND ') : ''} ORDER BY r.id DESC`;
   const [rows] = await pool.query(sql, params);
-  res.json(rows.map(decorateRental));
+  const hideUnverifiedCode = req.user.role === 'admin';
+  res.json(rows.map((row) => decorateRental(row, { hideUnverifiedCode })));
 }));
 
 // Cari / verifikasi penyewaan langsung berdasarkan Kode Booking (mis. CK-20261125-0005 atau 5)
@@ -139,7 +141,7 @@ router.get('/code/:code', asyncHandler(async (req, res) => {
   if (!match) throw new HttpError(404, 'Format kode booking tidak dikenali');
   const id = toInt(match[1]);
   if (id === null || id <= 0) throw new HttpError(404, 'Kode booking tidak ditemukan');
-  const rental = await findOr404(id, req.user);
+  const rental = await findOr404(id, req.user, pool, { revealCode: true });
   if (raw.startsWith('CK-') && rental.booking_code !== raw) {
     throw new HttpError(404, 'Kode booking tidak cocok dengan data penyewaan');
   }

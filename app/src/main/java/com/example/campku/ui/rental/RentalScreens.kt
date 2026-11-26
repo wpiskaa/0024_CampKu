@@ -740,7 +740,8 @@ fun RentalDetailScreen(
         onBack = handleBack,
         snackbarHostState = snackbar,
         actions = {
-            if (activeDateItems.isNotEmpty()) {
+            val activeNeedsVerification = isAdmin && activeDateItems.any { it.status == RentalStatus.DIPESAN && !it.bookingVerified }
+            if (activeDateItems.isNotEmpty() && !activeNeedsVerification) {
                 IconButton(onClick = { receiptBundle = activeDateItems.first() to activeDateItems }) {
                     Icon(Icons.Filled.ReceiptLong, contentDescription = "Nota Digital")
                 }
@@ -925,11 +926,14 @@ fun RentalDetailScreen(
                         }
                     }
 
-                    BookingPassCard(
-                        primary = groupPrimary,
-                        items = rentalsOnDate,
-                        onOpenReceipt = { receiptBundle = groupPrimary to rentalsOnDate },
-                    )
+                    if (!needsVerification) {
+                        BookingPassCard(
+                            primary = groupPrimary,
+                            items = rentalsOnDate,
+                            onOpenReceipt = { receiptBundle = groupPrimary to rentalsOnDate },
+                            showQrCode = !isAdmin,
+                        )
+                    }
                     rentalsOnDate.forEachIndexed { index, r ->
                         RentalEquipmentDetailCard(
                             index = index + 1,
