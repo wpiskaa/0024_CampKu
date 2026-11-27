@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,7 +37,6 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.ManageAccounts
-import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material.icons.filled.Terrain
@@ -493,13 +493,18 @@ fun ProfileScreen(navController: NavHostController, user: User) {
 private fun ThemeModeCard() {
     val context = LocalContext.current
     val tokenStore = remember(context) { (context.applicationContext as CampKuApp).container.tokenStore }
-    val currentMode by tokenStore.themeModeFlow.collectAsStateWithLifecycle(initialValue = TokenStore.THEME_LIGHT)
+    val currentMode by tokenStore.themeModeFlow.collectAsStateWithLifecycle(initialValue = TokenStore.THEME_SYSTEM)
+    val systemDark = isSystemInDarkTheme()
+    val effectiveDark = when (currentMode) {
+        TokenStore.THEME_DARK -> true
+        TokenStore.THEME_LIGHT -> false
+        else -> systemDark
+    }
     val scope = rememberCoroutineScope()
 
     val options = listOf(
         Triple(TokenStore.THEME_LIGHT, "Siang", Icons.Filled.LightMode),
         Triple(TokenStore.THEME_DARK, "Malam", Icons.Filled.DarkMode),
-        Triple(TokenStore.THEME_SYSTEM, "Sistem", Icons.Filled.PhoneAndroid),
     )
 
     Card(
@@ -520,7 +525,7 @@ private fun ThemeModeCard() {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 options.forEach { (mode, label, icon) ->
-                    val selected = currentMode == mode
+                    val selected = if (mode == TokenStore.THEME_DARK) effectiveDark else !effectiveDark
                     Surface(
                         onClick = { scope.launch { tokenStore.saveThemeMode(mode) } },
                         modifier = Modifier.weight(1f).height(42.dp),

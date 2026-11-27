@@ -2,6 +2,7 @@ package com.example.campku.ui.auth
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -62,8 +63,13 @@ import kotlinx.coroutines.launch
 private fun BrandHeader(subtitle: String) {
     val context = LocalContext.current
     val tokenStore = remember(context) { (context.applicationContext as CampKuApp).container.tokenStore }
-    val themeMode by tokenStore.themeModeFlow.collectAsStateWithLifecycle(initialValue = TokenStore.THEME_LIGHT)
-    val isDark = themeMode == TokenStore.THEME_DARK
+    val themeMode by tokenStore.themeModeFlow.collectAsStateWithLifecycle(initialValue = TokenStore.THEME_SYSTEM)
+    val systemDark = isSystemInDarkTheme()
+    val isDark = when (themeMode) {
+        TokenStore.THEME_DARK -> true
+        TokenStore.THEME_LIGHT -> false
+        else -> systemDark
+    }
     val scope = rememberCoroutineScope()
 
     Box(

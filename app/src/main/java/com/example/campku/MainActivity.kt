@@ -27,12 +27,12 @@ class MainActivity : ComponentActivity() {
         val container = (application as CampKuApp).container
         setContent {
             val themeMode by container.tokenStore.themeModeFlow
-                .collectAsStateWithLifecycle(initialValue = TokenStore.THEME_LIGHT)
+                .collectAsStateWithLifecycle(initialValue = TokenStore.THEME_SYSTEM)
             val systemDark = isSystemInDarkTheme()
             val darkTheme = when (themeMode) {
                 TokenStore.THEME_DARK -> true
-                TokenStore.THEME_SYSTEM -> systemDark
-                else -> false
+                TokenStore.THEME_LIGHT -> false
+                else -> systemDark
             }
 
             LaunchedEffect(darkTheme) {

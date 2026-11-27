@@ -66,7 +66,7 @@ async function main() {
   };
 
   if (n === 0) {
-    const cats = ['Tenda', 'Carrier', 'Sleeping Bag', 'Kompor', 'Aksesoris'];
+    const cats = ['Tenda', 'Carrier', 'Sleeping Bag', 'Kompor', 'Aksesoris', 'Lainnya'];
     for (const c of cats) await conn.query('INSERT INTO categories (name) VALUES (?)', [c]);
 
     const [rows] = await conn.query('SELECT id, name FROM categories');
@@ -89,6 +89,10 @@ async function main() {
     for (const [name, photoPath] of Object.entries(seedPhotos)) {
       await conn.query('UPDATE equipments SET photo_path = ? WHERE name = ? AND photo_path IS NULL', [photoPath, name]);
     }
+    // Pastikan kategori "Lainnya" selalu tersedia (diurutkan paling kanan/akhir oleh API)
+    await conn.query(
+      "INSERT IGNORE INTO categories (name, description) VALUES ('Lainnya', 'Perlengkapan pendukung dan aksesoris camping lainnya')"
+    );
   }
 
   await conn.end();

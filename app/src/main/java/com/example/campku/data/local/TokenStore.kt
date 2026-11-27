@@ -38,8 +38,8 @@ class TokenStore(private val context: Context) {
     /** null = belum login / sesi berakhir. */
     val sessionFlow: Flow<Session?> = context.sessionDataStore.data.map { it.toSession() }
 
-    /** Pilihan tema aplikasi: "light" (default Mode Siang), "dark" (Mode Malam), atau "system". */
-    val themeModeFlow: Flow<String> = context.sessionDataStore.data.map { it[Keys.THEME_MODE] ?: THEME_LIGHT }
+    /** Pilihan tema aplikasi: "system" (default mengikuti sistem HP), "light" (Siang), atau "dark" (Malam). */
+    val themeModeFlow: Flow<String> = context.sessionDataStore.data.map { it[Keys.THEME_MODE] ?: THEME_SYSTEM }
 
     suspend fun saveThemeMode(mode: String) {
         context.sessionDataStore.edit { it[Keys.THEME_MODE] = mode }
