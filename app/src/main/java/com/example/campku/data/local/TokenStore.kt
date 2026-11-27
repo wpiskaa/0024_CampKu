@@ -32,10 +32,18 @@ class TokenStore(private val context: Context) {
         val USER_EMAIL = stringPreferencesKey("user_email")
         val USER_ROLE = stringPreferencesKey("user_role")
         val USER_PHONE = stringPreferencesKey("user_phone")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
     }
 
     /** null = belum login / sesi berakhir. */
     val sessionFlow: Flow<Session?> = context.sessionDataStore.data.map { it.toSession() }
+
+    /** Pilihan tema aplikasi: "light" (default Mode Siang), "dark" (Mode Malam), atau "system". */
+    val themeModeFlow: Flow<String> = context.sessionDataStore.data.map { it[Keys.THEME_MODE] ?: THEME_LIGHT }
+
+    suspend fun saveThemeMode(mode: String) {
+        context.sessionDataStore.edit { it[Keys.THEME_MODE] = mode }
+    }
 
     suspend fun accessToken(): String? = context.sessionDataStore.data.first()[Keys.ACCESS]
 
@@ -65,7 +73,17 @@ class TokenStore(private val context: Context) {
     }
 
     suspend fun clear() {
-        context.sessionDataStore.edit { it.clear() }
+        context.sessionDataStore.edit { prefs ->
+            val savedTheme = prefs[Keys.THEME_MODE]
+            prefs.clear()
+            if (savedTheme != null) prefs[Keys.THEME_MODE] = savedTheme
+        }
+    }
+
+    companion object {
+        const val THEME_LIGHT = "light"
+        const val THEME_DARK = "dark"
+        const val THEME_SYSTEM = "system"
     }
 
     private fun androidx.datastore.preferences.core.MutablePreferences.putUser(user: User) {

@@ -15,39 +15,57 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.campku.CampKuApp
 import com.example.campku.R
 import com.example.campku.appViewModel
+import com.example.campku.data.local.TokenStore
 import com.example.campku.ui.components.AppTextField
 import com.example.campku.ui.components.LoadingButton
 import com.example.campku.ui.components.MessageEffect
 import com.example.campku.ui.components.SubScreen
+import kotlinx.coroutines.launch
 
 @Composable
 private fun BrandHeader(subtitle: String) {
+    val context = LocalContext.current
+    val tokenStore = remember(context) { (context.applicationContext as CampKuApp).container.tokenStore }
+    val themeMode by tokenStore.themeModeFlow.collectAsStateWithLifecycle(initialValue = TokenStore.THEME_LIGHT)
+    val isDark = themeMode == TokenStore.THEME_DARK
+    val scope = rememberCoroutineScope()
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -61,6 +79,27 @@ private fun BrandHeader(subtitle: String) {
             .padding(vertical = 32.dp),
         contentAlignment = Alignment.Center,
     ) {
+        Surface(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(end = 16.dp),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.16f),
+        ) {
+            IconButton(
+                onClick = {
+                    scope.launch {
+                        tokenStore.saveThemeMode(if (isDark) TokenStore.THEME_LIGHT else TokenStore.THEME_DARK)
+                    }
+                },
+            ) {
+                Icon(
+                    imageVector = if (isDark) Icons.Filled.LightMode else Icons.Filled.DarkMode,
+                    contentDescription = if (isDark) "Ganti ke Mode Siang" else "Ganti ke Mode Malam",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                )
+            }
+        }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Image(
                 painter = painterResource(id = R.drawable.ic_campku_logo),

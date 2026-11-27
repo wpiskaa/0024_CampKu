@@ -29,11 +29,14 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Checklist
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.ManageAccounts
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material.icons.filled.Terrain
@@ -53,11 +56,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -67,8 +72,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
+import com.example.campku.CampKuApp
 import com.example.campku.R
 import com.example.campku.appViewModel
+import com.example.campku.data.local.TokenStore
 import com.example.campku.data.model.ProfileUpdateRequest
 import com.example.campku.data.model.User
 import com.example.campku.data.remote.NetworkModule
@@ -329,6 +336,9 @@ fun ProfileScreen(navController: NavHostController, user: User) {
                 }
             }
 
+            // 1B. Pilihan Tema Aplikasi (Siang / Malam / Sistem)
+            ThemeModeCard()
+
             // 2. Aktivitas & Pesanan
             ProfileMenuSection(title = "Aktivitas & Pesanan") {
                 ProfileMenuItem(
@@ -476,6 +486,72 @@ fun ProfileScreen(navController: NavHostController, user: User) {
 
     activeModal?.let { modal ->
         ProfileInfoDialog(modal = modal, onDismiss = { activeModal = null })
+    }
+}
+
+@Composable
+private fun ThemeModeCard() {
+    val context = LocalContext.current
+    val tokenStore = remember(context) { (context.applicationContext as CampKuApp).container.tokenStore }
+    val currentMode by tokenStore.themeModeFlow.collectAsStateWithLifecycle(initialValue = TokenStore.THEME_LIGHT)
+    val scope = rememberCoroutineScope()
+
+    val options = listOf(
+        Triple(TokenStore.THEME_LIGHT, "Siang", Icons.Filled.LightMode),
+        Triple(TokenStore.THEME_DARK, "Malam", Icons.Filled.DarkMode),
+        Triple(TokenStore.THEME_SYSTEM, "Sistem", Icons.Filled.PhoneAndroid),
+    )
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                "Tampilan Aplikasi",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                options.forEach { (mode, label, icon) ->
+                    val selected = currentMode == mode
+                    Surface(
+                        onClick = { scope.launch { tokenStore.saveThemeMode(mode) } },
+                        modifier = Modifier.weight(1f).height(42.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                        border = if (selected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                        ) {
+                            Icon(
+                                icon,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                label,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
